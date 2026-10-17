@@ -13,15 +13,15 @@
 // ============================================================
 
 generator client {
-  provider      = "prisma-client-js"
-  output        = "../node_modules/.prisma/client"
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("DATABASE_SHADOW_URL")
-  relationMode = "foreignKeys"
+  relationMode      = "foreignKeys"
 }
 
 // ------------------------------------------------------------
@@ -29,45 +29,55 @@ datasource db {
 // ------------------------------------------------------------
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String     @id @default(cuid())
+  email         String     @unique
   emailVerified DateTime?
   displayName   String?
-  locale        String   @default("ar")
+  locale        String     @default("ar")
   status        UserStatus @default(UNVERIFIED)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  authIdentities   AuthIdentity[]
-  auditEvents      AuditEvent[]
-  connections      IntegrationConnection[]
-  initiatedJobs    IntegrationJob[]     @relation("JobInitiator")
-  consentRecords   ConsentRecord[]
-  emailVerifications EmailVerification[]
-  passwordResets   PasswordReset[]
-  profile          MemberProfile?
-  roleGrants       RoleGrant[]
+  authIdentities          AuthIdentity[]
+  auditEvents             AuditEvent[]
+  connections             IntegrationConnection[]
+  initiatedJobs           IntegrationJob[]        @relation("JobInitiator")
+  consentRecords          ConsentRecord[]
+  emailVerifications      EmailVerification[]
+  passwordResets          PasswordReset[]
+  profile                 MemberProfile?
+  roleGrants              RoleGrant[]
+  // G03 relations
+  proposalsSubmitted      ProjectProposal[]       @relation("ProposalSubmitter")
+  proposalsReviewed       ReviewDecision[]
+  projectsLed             Project[]               @relation("ProjectLead")
+  projectsStewarded       Project[]               @relation("ProjectSteward")
+  stewardAssignments      StewardAssignment[]
+  teamMemberships         TeamMembership[]
+  teamInvitationsSent     TeamInvitation[]        @relation("InvitationInviter")
+  teamInvitationsReceived TeamInvitation[]        @relation("InvitationInvitee")
+  resourceGrants          ResourceGrant[]         @relation("GrantActor")
 
   @@index([email])
 }
 
 enum UserStatus {
-  UNVERIFIED   // registered but email not verified
-  ACTIVE       // verified, in good standing
-  SUSPENDED    // governance suspension
-  DELETED      // soft-deleted; data retained per policy
+  UNVERIFIED // registered but email not verified
+  ACTIVE // verified, in good standing
+  SUSPENDED // governance suspension
+  DELETED // soft-deleted; data retained per policy
 }
 
 model AuthIdentity {
   // STR-06 + 03-Data §invariant 1: (provider, providerSub) globally unique.
   // Email is normalized but NEVER trusted as the sole external identity key.
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
-  provider     String   // "password" | "google" | future OIDC providers
-  providerSub  String   // immutable provider id (e.g. Google `sub`)
-  emailAtLink  String   // email at the time of linking (audit only)
-  passwordHash String?  // only set when provider = "password"
-  linkedAt     DateTime @default(now())
+  provider     String // "password" | "google" | future OIDC providers
+  providerSub  String // immutable provider id (e.g. Google `sub`)
+  emailAtLink  String // email at the time of linking (audit only)
+  passwordHash String? // only set when provider = "password"
+  linkedAt     DateTime  @default(now())
   unlinkedAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -77,12 +87,12 @@ model AuthIdentity {
 }
 
 model EmailVerification {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique // store hash, never the raw token
-  expiresAt DateTime
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique // store hash, never the raw token
+  expiresAt  DateTime
   consumedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -90,12 +100,12 @@ model EmailVerification {
 }
 
 model PasswordReset {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
   consumedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -107,16 +117,16 @@ model PasswordReset {
 // ------------------------------------------------------------
 
 model AuditEvent {
-  id          String   @id @default(cuid())
-  actorId     String?  // null for system events
-  action      String   // e.g. "user.register", "integration.job.submit"
-  targetType  String   // e.g. "User", "IntegrationJob"
-  targetId    String?
-  outcome     String   // "success" | "failure" | "denied"
-  reason      String?
-  reqId       String?  // correlation id
-  meta        Json?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  actorId    String? // null for system events
+  action     String // e.g. "user.register", "integration.job.submit"
+  targetType String // e.g. "User", "IntegrationJob"
+  targetId   String?
+  outcome    String // "success" | "failure" | "denied"
+  reason     String?
+  reqId      String? // correlation id
+  meta       Json?
+  createdAt  DateTime @default(now())
 
   user User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
@@ -131,21 +141,21 @@ model AuditEvent {
 
 model IntegrationProvider {
   // G01 stores the static registry; G07 adds the governance approval flow.
-  id            String   @id // stable slug+version, e.g. "str.mock.v1"
-  slug          String
-  version       String
-  displayName   String
-  description   String
-  owner         String
-  baseOrigin    String
-  trustStatus   String   @default("registered") // ProviderTrustStatus
-  authMode      Json
+  id             String   @id // stable slug+version, e.g. "str.mock.v1"
+  slug           String
+  version        String
+  displayName    String
+  description    String
+  owner          String
+  baseOrigin     String
+  trustStatus    String   @default("registered") // ProviderTrustStatus
+  authMode       Json
   webhookSigning Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  capabilities  IntegrationCapability[]
-  connections   IntegrationConnection[]
+  capabilities IntegrationCapability[]
+  connections  IntegrationConnection[]
 
   @@unique([slug, version])
   @@index([trustStatus])
@@ -154,10 +164,10 @@ model IntegrationProvider {
 model IntegrationCapability {
   id              String   @id @default(cuid())
   providerId      String
-  code            String   // namespaced, e.g. "application.test"
+  code            String // namespaced, e.g. "application.test"
   summary         String
-  executionMode   String   // "sync" | "async"
-  riskClass       String   // "low" | "medium" | "high" | "critical"
+  executionMode   String // "sync" | "async"
+  riskClass       String // "low" | "medium" | "high" | "critical"
   requiredScopes  String[] // PostgreSQL native array
   inputSchemaRef  String
   outputSchemaRef String
@@ -175,21 +185,21 @@ model IntegrationCapability {
 model IntegrationConnection {
   // 03-Data §invariant 8: credentials stored via CredentialReference, never
   // plaintext in exposed queries. This model holds only the reference id.
-  id                  String   @id @default(cuid())
-  providerId          String
-  subjectKind         String   // "user" | "project" | "organization"
-  subjectId           String
+  id                    String    @id @default(cuid())
+  providerId            String
+  subjectKind           String // "user" | "project" | "organization"
+  subjectId             String
   credentialReferenceId String
-  status              String   @default("pending") // ConnectionStatus
-  scopes              String[]
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  revokedAt           DateTime?
+  status                String    @default("pending") // ConnectionStatus
+  scopes                String[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  revokedAt             DateTime?
 
-  provider        IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  user            User?               @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  jobs            IntegrationJob[]
-  consentRecords  ConsentRecord[]
+  provider       IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user           User?               @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  jobs           IntegrationJob[]
+  consentRecords ConsentRecord[]
 
   @@unique([providerId, subjectKind, subjectId])
   @@index([subjectKind, subjectId])
@@ -198,13 +208,13 @@ model IntegrationConnection {
 model ConsentRecord {
   id           String   @id @default(cuid())
   connectionId String
-  grantedBy    String   // actor id
+  grantedBy    String // actor id
   scopes       String[]
-  evidence     String   // "explicit_consent" | "governance_approval"
+  evidence     String // "explicit_consent" | "governance_approval"
   at           DateTime @default(now())
 
   connection IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  user       User                   @relation(fields: [grantedBy], references: [id], onDelete: Cascade)
+  user       User                  @relation(fields: [grantedBy], references: [id], onDelete: Cascade)
 
   @@index([connectionId])
 }
@@ -212,26 +222,26 @@ model ConsentRecord {
 model IntegrationJob {
   // 03-Data §invariant 9: job belongs to a connection AND authorized subject.
   // Project suspension / grant revocation blocks new jobs (enforced in service).
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   connectionId    String
   capability      String
   initiatorId     String?
   subjectKind     String
   subjectId       String
-  status          String   @default("queued") // IntegrationJobStatus
+  status          String    @default("queued") // IntegrationJobStatus
   idempotencyKey  String
   payload         Json
   result          Json?
   failureCategory String?
   failureMessage  String?
   retryable       Boolean?
-  createdAt       DateTime @default(now())
-  queuedAt        DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  queuedAt        DateTime  @default(now())
   startedAt       DateTime?
   finishedAt      DateTime?
 
   connection IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  initiator  User?                  @relation("JobInitiator", fields: [initiatorId], references: [id], onDelete: SetNull)
+  initiator  User?                 @relation("JobInitiator", fields: [initiatorId], references: [id], onDelete: SetNull)
 
   @@unique([connectionId, idempotencyKey])
   @@index([status, queuedAt])
@@ -257,11 +267,11 @@ model IntegrationEvent {
 model CredentialReference {
   // The actual secret is stored in a key manager (ADR-04). This row holds only
   // the metadata needed to locate and rotate it.
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   encryptionKeyId String
-  cipherPreview   String   // non-sensitive fingerprint for audit logs
+  cipherPreview   String // non-sensitive fingerprint for audit logs
   rotatedAt       DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([encryptionKeyId])
 }
@@ -271,13 +281,13 @@ model CredentialReference {
 // ------------------------------------------------------------
 
 model OutboxEvent {
-  id          String   @id @default(cuid())
-  aggregate   String   // e.g. "integration.job"
-  aggregateId String
-  type        String   // e.g. "integration.job.submitted"
-  payload     Json
+  id           String    @id @default(cuid())
+  aggregate    String // e.g. "integration.job"
+  aggregateId  String
+  type         String // e.g. "integration.job.submitted"
+  payload      Json
   dispatchedAt DateTime?
-  createdAt   DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([dispatchedAt])
   @@index([aggregate, aggregateId])
@@ -294,12 +304,12 @@ model OutboxEvent {
 model RoleGrant {
   // Global roles only in G02 (member, admin). Project-scoped roles
   // (project_lead, steward, team_member) arrive in G03 with a scope field.
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  role      String   // "member" | "admin"
-  scope     String   @default("global") // future: "project:xxx"
+  role      String // "member" | "admin"
+  scope     String    @default("global") // future: "project:xxx"
   grantedBy String?
-  grantedAt DateTime @default(now())
+  grantedAt DateTime  @default(now())
   revokedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -313,37 +323,37 @@ model RoleGrant {
 // ------------------------------------------------------------
 
 model MemberProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
+  id              String              @id @default(cuid())
+  userId          String              @unique
   displayName     String
-  headline        String?  // short professional title
-  bio             String?  @db.Text
+  headline        String? // short professional title
+  bio             String?             @db.Text
   avatarUrl       String?
-  contactEmail    String?  // separate from auth email; visible per settings
+  contactEmail    String? // separate from auth email; visible per settings
   location        String?
   websiteUrl      String?
   availability    ProfileAvailability @default(CLOSED)
-  completenessPct Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  completenessPct Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  skills       MemberSkill[]
-  portfolio    PortfolioItem[]
-  visibility   ProfileVisibility?
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills     MemberSkill[]
+  portfolio  PortfolioItem[]
+  visibility ProfileVisibility?
 
   @@index([availability])
 }
 
 enum ProfileAvailability {
-  OPEN      // actively seeking opportunities
-  LIMITED   // open to select opportunities
-  CLOSED    // not currently available
+  OPEN // actively seeking opportunities
+  LIMITED // open to select opportunities
+  CLOSED // not currently available
 }
 
 model Skill {
-  id    String @id @default(cuid())
-  name  String @unique
+  id             String @id @default(cuid())
+  name           String @unique
   // Normalized lowercase for dedup; display uses original casing.
   normalizedName String @unique
 
@@ -353,7 +363,7 @@ model Skill {
 }
 
 model MemberSkill {
-  id        String @id @default(cuid())
+  id        String     @id @default(cuid())
   profileId String
   skillId   String
   level     SkillLevel @default(INTERMEDIATE)
@@ -372,15 +382,15 @@ enum SkillLevel {
 }
 
 model PortfolioItem {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   profileId   String
   title       String
-  description String?  @db.Text
+  description String?   @db.Text
   url         String?
   startedAt   DateTime?
   endedAt     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   profile MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
@@ -390,13 +400,254 @@ model PortfolioItem {
 model ProfileVisibility {
   // Controls what is visible on the public profile view. The auth email
   // is NEVER shown publicly; only contactEmail (if set + showContact=true).
-  id              String   @id @default(cuid())
-  profileId       String   @unique
-  showContact     Boolean  @default(false)
-  showLocation    Boolean  @default(false)
-  showSkills      Boolean  @default(true)
-  showPortfolio   Boolean  @default(true)
+  id               String  @id @default(cuid())
+  profileId        String  @unique
+  showContact      Boolean @default(false)
+  showLocation     Boolean @default(false)
+  showSkills       Boolean @default(true)
+  showPortfolio    Boolean @default(true)
   showAvailability Boolean @default(true)
 
   profile MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// G03 — Project Proposals and Team Governance
+// ============================================================
+// Implements STR-GOV-TEAM-01: no operational team without an approved
+// project charter, named team lead, and institutional steward.
+// All constraints enforced in DB + service layer, NOT just UI.
+// ============================================================
+
+// ------------------------------------------------------------
+// Project Proposals (module: proposals)
+// ------------------------------------------------------------
+
+model ProjectProposal {
+  id                String         @id @default(cuid())
+  submitterId       String
+  status            ProposalStatus @default(DRAFT)
+  title             String
+  // The latest charter revision is the "current" one. Revisions are immutable
+  // once submitted; revising creates a new CharterRevision row.
+  currentRevisionId String?        @unique
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  withdrawnAt       DateTime?
+
+  submitter       User              @relation("ProposalSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  currentRevision CharterRevision?  @relation("ProposalCurrentRevision", fields: [currentRevisionId], references: [id])
+  revisions       CharterRevision[]
+  reviewDecisions ReviewDecision[]
+  project         Project?
+
+  @@index([submitterId])
+  @@index([status])
+}
+
+enum ProposalStatus {
+  DRAFT // submitter is still editing
+  SUBMITTED // sent for review
+  NEEDS_REVISION // reviewer requested changes; submitter can revise
+  APPROVED // approved → atomic team creation triggered
+  REJECTED // rejected with reason
+  WITHDRAWN // submitter withdrew
+}
+
+model CharterRevision {
+  // Immutable once created. Each revision captures a full snapshot of the
+  // charter at the time of submission/revision.
+  id                      String   @id @default(cuid())
+  proposalId              String
+  version                 Int // 1, 2, 3... increments per proposal
+  // Charter sections (per G03 §1)
+  problemStatement        String   @db.Text
+  outcomes                String   @db.Text
+  scope                   String   @db.Text
+  exclusions              String?  @db.Text
+  beneficiaries           String?  @db.Text
+  preliminaryArchitecture String?  @db.Text
+  requiredSkills          String[] // array of skill names
+  resources               String?  @db.Text
+  risks                   String?  @db.Text
+  rights                  String?  @db.Text
+  acceptanceCriteria      String   @db.Text
+  // Metadata
+  createdBy               String // userId who created this revision
+  createdAt               DateTime @default(now())
+  // Immutable after submission; draft revisions can be edited.
+  isSubmitted             Boolean  @default(false)
+
+  proposal        ProjectProposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  currentFor      ProjectProposal? @relation("ProposalCurrentRevision")
+  reviewDecisions ReviewDecision[]
+
+  @@unique([proposalId, version])
+  @@index([proposalId])
+}
+
+model ReviewDecision {
+  id           String       @id @default(cuid())
+  proposalId   String
+  reviewerId   String
+  revisionId   String
+  action       ReviewAction // APPROVE, REJECT, REQUEST_REVISION
+  reason       String       @db.Text
+  // Conflict-of-interest guard: reviewer cannot be the submitter.
+  // Enforced in service layer + tested.
+  isSelfReview Boolean      @default(false) // always false; tracked for audit
+  decidedAt    DateTime     @default(now())
+
+  proposal ProjectProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  reviewer User            @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  revision CharterRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([reviewerId])
+}
+
+enum ReviewAction {
+  APPROVE
+  REJECT
+  REQUEST_REVISION
+}
+
+// ------------------------------------------------------------
+// Projects & Teams (module: projects, module: teams)
+// ------------------------------------------------------------
+
+model Project {
+  // Created atomically when a proposal is approved. Exactly one project per
+  // approved proposal (unique constraint). The atomic approval transaction
+  // creates Project + Team + StewardAssignment + Lead membership together.
+  id          String        @id @default(cuid())
+  proposalId  String        @unique // one project per approved proposal
+  leadId      String
+  stewardId   String // institutional steward (required, non-null)
+  title       String
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  suspendedAt DateTime?
+  cancelledAt DateTime?
+
+  proposal       ProjectProposal  @relation(fields: [proposalId], references: [id])
+  lead           User             @relation("ProjectLead", fields: [leadId], references: [id])
+  steward        User             @relation("ProjectSteward", fields: [stewardId], references: [id])
+  team           Team?
+  memberships    TeamMembership[]
+  resourceGrants ResourceGrant[]
+
+  @@index([leadId])
+  @@index([stewardId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  ACTIVE // approved and operational
+  SUSPENDED // resources suspended; no new jobs
+  CANCELLED // permanently cancelled
+  COMPLETED // finished (future, G05)
+}
+
+model Team {
+  // The operational team for a project. Exactly one team per project (unique).
+  // There is NO endpoint to create a team directly — teams are created ONLY
+  // by the atomic approveProjectProposal() transaction.
+  id        String   @id @default(cuid())
+  projectId String   @unique // one team per project
+  name      String
+  createdAt DateTime @default(now())
+
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberships TeamMembership[]
+  invitations TeamInvitation[]
+
+  @@index([projectId])
+}
+
+model TeamMembership {
+  id       String    @id @default(cuid())
+  teamId   String
+  userId   String
+  role     TeamRole  @default(MEMBER)
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id])
+  projectId String?
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+enum TeamRole {
+  LEAD // team lead (set at approval; can invite members)
+  STEWARD // institutional steward (oversight, not daily work)
+  MEMBER // regular team member
+}
+
+model TeamInvitation {
+  id          String           @id @default(cuid())
+  teamId      String
+  inviteeId   String
+  inviterId   String
+  role        TeamRole         @default(MEMBER)
+  status      InvitationStatus @default(PENDING)
+  message     String?          @db.Text
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+
+  team    Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitee User @relation("InvitationInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  inviter User @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, inviteeId, status]) // prevent duplicate pending invites
+  @@index([inviteeId])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model StewardAssignment {
+  // Records the institutional steward for a project. The steward provides
+  // oversight and escalation — they are NOT the team lead. The steward is
+  // required at approval time (atomic transaction fails without one).
+  id           String    @id @default(cuid())
+  projectId    String    @unique // one active steward per project
+  stewardId    String
+  assignedBy   String?
+  assignedAt   DateTime  @default(now())
+  unassignedAt DateTime?
+
+  steward User @relation(fields: [stewardId], references: [id], onDelete: Cascade)
+
+  @@index([stewardId])
+}
+
+model ResourceGrant {
+  // Tracks resource grants to a project/team. Suspension revokes these.
+  id           String    @id @default(cuid())
+  projectId    String
+  grantType    String // e.g., "integration:mock", "storage:bucket"
+  scope        String    @db.Text // detailed scope
+  grantedBy    String?
+  grantedAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  revokeReason String?   @db.Text
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation("GrantActor", fields: [grantedBy], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([grantType])
 }
