@@ -61,6 +61,7 @@ async function getUserId(page: import("@playwright/test").Page): Promise<string>
 
 test.describe("G03 — Full Institutional Governance E2E", () => {
   test("propose → review → revise → approve → team → invite → reject", async ({ page, browser }) => {
+    test.setTimeout(180000); // 3 minutes for full governance flow
     // ── Step 1: Proposer signs up and creates a proposal ──
     await signupAndVerify(page, PROPOSER_EMAIL, "G03 Proposer");
     await signupAndVerify(page, INVITEE_EMAIL, "G03 Invitee");
@@ -172,6 +173,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
   });
 
   test("second proposal is rejected with reason recorded", async ({ page, browser }) => {
+    test.setTimeout(120000); // 2 minutes
     // Create a second proposal and reject it.
     await signupAndVerify(page, `${PREFIX}-proposer2@str-test.local`, "G03 Proposer 2");
     await signin(page, `${PREFIX}-proposer2@str-test.local`, PASSWORD);
