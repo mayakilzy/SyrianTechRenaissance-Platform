@@ -41,22 +41,26 @@ model User {
   authIdentities          AuthIdentity[]
   auditEvents             AuditEvent[]
   connections             IntegrationConnection[]
-  initiatedJobs           IntegrationJob[]        @relation("JobInitiator")
+  initiatedJobs           IntegrationJob[]         @relation("JobInitiator")
   consentRecords          ConsentRecord[]
   emailVerifications      EmailVerification[]
   passwordResets          PasswordReset[]
   profile                 MemberProfile?
   roleGrants              RoleGrant[]
   // G03 relations
-  proposalsSubmitted      ProjectProposal[]       @relation("ProposalSubmitter")
+  proposalsSubmitted      ProjectProposal[]        @relation("ProposalSubmitter")
   proposalsReviewed       ReviewDecision[]
-  projectsLed             Project[]               @relation("ProjectLead")
-  projectsStewarded       Project[]               @relation("ProjectSteward")
+  projectsLed             Project[]                @relation("ProjectLead")
+  projectsStewarded       Project[]                @relation("ProjectSteward")
   stewardAssignments      StewardAssignment[]
   teamMemberships         TeamMembership[]
-  teamInvitationsSent     TeamInvitation[]        @relation("InvitationInviter")
-  teamInvitationsReceived TeamInvitation[]        @relation("InvitationInvitee")
-  resourceGrants          ResourceGrant[]         @relation("GrantActor")
+  teamInvitationsSent     TeamInvitation[]         @relation("InvitationInviter")
+  teamInvitationsReceived TeamInvitation[]         @relation("InvitationInvitee")
+  resourceGrants          ResourceGrant[]          @relation("GrantActor")
+  // G04 relations
+  opportunitiesCreated    Opportunity[]            @relation("OpportunityCreator")
+  opportunityReviews      OpportunityReview[]      @relation("OpportunityReviewer")
+  opportunityApplications OpportunityApplication[] @relation("OpportunityApplicant")
 
   @@index([email])
 }
@@ -540,6 +544,7 @@ model Project {
   team           Team?
   memberships    TeamMembership[]
   resourceGrants ResourceGrant[]
+  opportunities  Opportunity[]
 
   @@index([leadId])
   @@index([stewardId])
@@ -650,4 +655,135 @@ model ResourceGrant {
 
   @@index([projectId])
   @@index([grantType])
+}
+
+// ============================================================
+// G04 — Talent and Opportunity Workflows
+// ============================================================
+
+// ------------------------------------------------------------
+// Opportunities (module: opportunities)
+// ------------------------------------------------------------
+
+model Opportunity {
+  id                  String            @id @default(cuid())
+  title               String
+  description         String            @db.Text
+  type                OpportunityType   @default(PROJECT)
+  status              OpportunityStatus @default(DRAFT)
+  // Who created this opportunity (the "owner").
+  createdById         String
+  // Optional link to an approved G03 project.
+  projectId           String?
+  // Required skills/qualifications (free text, not linked to Skill table
+  // because opportunities may need skills not yet in the platform).
+  requirements        String?           @db.Text
+  // Location/remote.
+  location            String?
+  isRemote            Boolean           @default(true)
+  // Compensation type.
+  compensationType    String? // "volunteer" | "paid" | "stipend" | "equity"
+  compensationNote    String?           @db.Text
+  // Deadline for applications.
+  applicationDeadline DateTime?
+  // Lifecycle timestamps.
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  submittedAt         DateTime?
+  publishedAt         DateTime?
+  closedAt            DateTime?
+  cancelledAt         DateTime?
+
+  // Relations
+  createdBy    User                     @relation("OpportunityCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  project      Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  applications OpportunityApplication[]
+  reviews      OpportunityReview[]
+
+  @@index([status])
+  @@index([createdById])
+  @@index([type])
+}
+
+enum OpportunityType {
+  PROJECT // project-based collaboration
+  TASK // specific task/bugfix
+  MENTORSHIP // mentorship slot
+  INTERNSHIP // internship position
+  CONSULTING // consulting engagement
+  OTHER
+}
+
+enum OpportunityStatus {
+  DRAFT // creator is still editing
+  SUBMITTED // sent for editorial review
+  NEEDS_REVISION // reviewer requested changes
+  PUBLISHED // published and visible to members
+  CLOSED // applications closed (manually or deadline)
+  CANCELLED // creator cancelled
+}
+
+// ------------------------------------------------------------
+// Opportunity Reviews (editorial review decisions)
+// ------------------------------------------------------------
+
+model OpportunityReview {
+  id            String                  @id @default(cuid())
+  opportunityId String
+  reviewerId    String
+  action        OpportunityReviewAction
+  reason        String                  @db.Text
+  decidedAt     DateTime                @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  reviewer    User        @relation("OpportunityReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+  @@index([reviewerId])
+}
+
+enum OpportunityReviewAction {
+  APPROVE // publish the opportunity
+  REJECT // reject with reason
+  REQUEST_REVISION // ask creator to revise
+}
+
+// ------------------------------------------------------------
+// Opportunity Applications (module: opportunities)
+// ------------------------------------------------------------
+
+model OpportunityApplication {
+  id                 String            @id @default(cuid())
+  opportunityId      String
+  applicantId        String
+  status             ApplicationStatus @default(SUBMITTED)
+  // Applicant's cover note / pitch.
+  coverNote          String?           @db.Text
+  // Reviewer's qualification notes (private — not visible to applicant).
+  qualificationNotes String?           @db.Text
+  // Decision reason (visible to applicant on decision).
+  decisionReason     String?           @db.Text
+  // Idempotency key to prevent duplicate applications.
+  idempotencyKey     String
+  // Timestamps.
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  decidedAt          DateTime?
+  withdrawnAt        DateTime?
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  applicant   User        @relation("OpportunityApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, applicantId]) // one application per user per opportunity
+  @@index([opportunityId])
+  @@index([applicantId])
+  @@index([status])
+}
+
+enum ApplicationStatus {
+  SUBMITTED // submitted, awaiting review
+  UNDER_REVIEW // reviewer is evaluating
+  ACCEPTED // accepted
+  REJECTED // rejected with reason
+  WITHDRAWN // applicant withdrew
 }
