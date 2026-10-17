@@ -382,7 +382,7 @@ describe("G03-FIX §7 — Steward and lead change", () => {
       proposalId: proposal.id,
       reviewerId,
       action: "APPROVE",
-      reason: "Approved.",
+      reason: "Approved for testing purposes.",
       stewardId,
     });
     const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
@@ -399,7 +399,7 @@ describe("G03-FIX §7 — Steward and lead change", () => {
       proposalId: proposal.id,
       reviewerId,
       action: "APPROVE",
-      reason: "Approved.",
+      reason: "Approved for testing purposes.",
       stewardId,
     });
     const project = await db.project.findUnique({
