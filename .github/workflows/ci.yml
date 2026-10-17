@@ -137,6 +137,9 @@ jobs:
       - name: Run migrations (PostgreSQL)
         run: bunx prisma migrate deploy
 
+      - name: Seed synthetic fixtures
+        run: bun run db:seed
+
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
