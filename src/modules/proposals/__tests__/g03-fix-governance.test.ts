@@ -320,10 +320,12 @@ describe("G03-FIX §5 — Concurrent approval (idempotency under race)", () => {
       }),
     ]);
 
-    // At least one should succeed; the other should fail (ConflictError).
+    // The key invariant: exactly ONE project + ONE team, regardless of
+    // how many API calls returned success vs. race-condition error.
+    // With proper optimistic locking, one call succeeds and the other
+    // either returns idempotently or throws. Both paths are acceptable.
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.filter((r) => r.status === "rejected").length;
-    expect(succeeded + failed).toBe(2);
+    expect(succeeded).toBeGreaterThanOrEqual(1);
 
     // CRITICAL: exactly ONE project/team created.
     const projects = await db.project.count({ where: { proposalId: proposal.id } });
