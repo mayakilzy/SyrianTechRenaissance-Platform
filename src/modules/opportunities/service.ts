@@ -254,15 +254,19 @@ export async function reviewOpportunity(input: ReviewOpportunityInput) {
   });
 
   // Send notifications (outside the transaction — non-critical).
-  if (input.action === "APPROVE") {
-    await notify(opp.createdById, "opportunity.published", "Opportunity Published",
+  try {
+    if (input.action === "APPROVE") {
+      await notify(opp.createdById, "opportunity.published", "Opportunity Published",
       `Your opportunity "${opp.title}" has been published.`);
   } else if (input.action === "REQUEST_REVISION") {
     await notify(opp.createdById, "opportunity.revision_requested", "Revision Requested",
       `Your opportunity "${opp.title}" needs revision. Reason: ${input.reason}`);
   } else if (input.action === "REJECT") {
     await notify(opp.createdById, "opportunity.rejected", "Opportunity Rejected",
-      `Your opportunity "${opp.title}" was rejected. Reason: ${input.reason}`);
+        `Your opportunity "${opp.title}" was rejected. Reason: ${input.reason}`);
+    }
+  } catch (notifErr) {
+    logger.warn("notification.failed", { err: notifErr instanceof Error ? notifErr.message : String(notifErr) });
   }
 
   logger.info("opportunities.reviewed", {
@@ -308,9 +312,10 @@ export async function applyForOpportunity(
       },
     });
     logger.info("opportunities.applied", { applicationId: application.id, opportunityId, applicantId });
-    // Notify the opportunity creator.
-    await notify(opp.createdById, "application.submitted", "New Application",
+    // Notify the opportunity creator (non-critical).
+    try { await notify(opp.createdById, "application.submitted", "New Application",
       `A new application was submitted for "${opp.title}".`);
+    } catch (notifErr) { logger.warn("notification.failed", { err: notifErr instanceof Error ? notifErr.message : String(notifErr) }); }
     return application;
   } catch (e: unknown) {
     if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
@@ -415,13 +420,17 @@ export async function decideApplication(
     throw new ConflictError("Application is no longer in a decidable status (concurrent decision)");
   }
 
-  // Notify the applicant.
-  await notify(
+  // Notify the applicant (non-critical — don't fail the decision if notification fails).
+  try {
+    await notify(
     application.applicantId,
     `application.${decision.toLowerCase()}`,
     decision === "ACCEPTED" ? "Application Accepted" : "Application Rejected",
-    `Your application for "${application.opportunity.title}" was ${decision.toLowerCase()}. Reason: ${reason}`,
-  );
+      `Your application for "${application.opportunity.title}" was ${decision.toLowerCase()}. Reason: ${reason}`,
+    );
+  } catch (notifErr) {
+    logger.warn("notification.failed", { err: notifErr instanceof Error ? notifErr.message : String(notifErr) });
+  }
 
   logger.info("opportunities.application_decided", { applicationId, decision, decisionMakerId });
 }
@@ -436,17 +445,24 @@ export async function withdrawApplication(applicationId: string, applicantId: st
     throw new ConflictError(`Cannot withdraw application in status ${application.status}`);
   }
 
-  await db.opportunityApplication.update({
-    where: { id: applicationId },
+  // Atomic: optimistic lock on status IN (SUBMITTED, UNDER_REVIEW).
+  // Prevents concurrent withdrawal + decision race.
+  const updated = await db.opportunityApplication.updateMany({
+    where: { id: applicationId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
     data: { status: "WITHDRAWN", withdrawnAt: new Date() },
   });
-  // Notify the opportunity creator.
-  await notify(
+
+  if (updated.count === 0) {
+    throw new ConflictError("Application is no longer in a withdrawable status (concurrent decision)");
+  }
+  // Notify the opportunity creator (non-critical).
+  try { await notify(
     application.opportunityId ? (await db.opportunity.findUnique({ where: { id: application.opportunityId }, select: { createdById: true, title: true } }))?.createdById ?? "" : "",
     "application.withdrawn",
     "Application Withdrawn",
-    `An application was withdrawn for your opportunity.`,
-  );
+      `An application was withdrawn for your opportunity.`,
+    );
+  } catch (notifErr) { logger.warn("notification.failed", { err: notifErr instanceof Error ? notifErr.message : String(notifErr) }); }
 
   logger.info("opportunities.application_withdrawn", { applicationId, applicantId });
 }

@@ -202,6 +202,9 @@
     "accept": "Accept",
     "decline": "Decline",
     "withdraw": "Withdraw",
-    "qualificationNotes": "Qualification Notes (private)"
+    "qualificationNotes": "Qualification Notes (private)",
+    "noApplications": "No applications yet.",
+    "backToOpportunity": "Back to opportunity",
+    "decisionReason": "Decision reason"
   }
 }

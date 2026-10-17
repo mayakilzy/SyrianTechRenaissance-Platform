@@ -202,6 +202,9 @@
     "accept": "قبول",
     "decline": "رفض",
     "withdraw": "انسحاب",
-    "qualificationNotes": "ملاحظات التأهيل (خاصة)"
+    "qualificationNotes": "ملاحظات التأهيل (خاصة)",
+    "noApplications": "لا توجد طلبات بعد.",
+    "backToOpportunity": "العودة إلى الفرصة",
+    "decisionReason": "سبب القرار"
   }
 }
