@@ -77,3 +77,4 @@ tests/database-runtime-*.sh
 /prisma/*.db
 /prisma/*.db-journal
 /db/
+tool-results/
