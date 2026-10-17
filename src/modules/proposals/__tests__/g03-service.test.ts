@@ -82,7 +82,12 @@ beforeEach(async () => {
       displayName: "Test Reviewer",
       status: "ACTIVE",
       emailVerified: new Date(),
-      roleGrants: { create: { role: "member", scope: "global" } },
+      roleGrants: {
+        create: [
+          { role: "member", scope: "global" },
+          { role: "reviewer", scope: "global" },
+        ],
+      },
     },
   });
   reviewerId = reviewer.id;
@@ -93,7 +98,12 @@ beforeEach(async () => {
       displayName: "Test Steward",
       status: "ACTIVE",
       emailVerified: new Date(),
-      roleGrants: { create: { role: "member", scope: "global" } },
+      roleGrants: {
+        create: [
+          { role: "member", scope: "global" },
+          { role: "steward", scope: "global" },
+        ],
+      },
     },
   });
   stewardId = steward.id;
