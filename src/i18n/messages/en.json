@@ -191,6 +191,17 @@
     "typeMentorship": "Mentorship",
     "typeInternship": "Internship",
     "typeConsulting": "Consulting",
-    "typeOther": "Other"
+    "typeOther": "Other",
+    "coverNote": "Cover Note",
+    "coverNotePlaceholder": "Tell the opportunity creator why you're a good fit...",
+    "confirmApply": "Submit Application",
+    "cancel": "Cancel",
+    "editOpportunity": "Edit",
+    "myApplications": "My Applications",
+    "reviewApplications": "Review Applications",
+    "accept": "Accept",
+    "decline": "Decline",
+    "withdraw": "Withdraw",
+    "qualificationNotes": "Qualification Notes (private)"
   }
 }

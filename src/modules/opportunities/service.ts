@@ -25,6 +25,7 @@ import {
   UnprocessableEntityError,
 } from "@/lib/errors";
 import { z } from "zod/v4";
+import { notify } from "@/modules/notifications/service";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -221,7 +222,11 @@ export async function reviewOpportunity(input: ReviewOpportunityInput) {
     throw new ForbiddenError("Cannot review your own opportunity (conflict of interest)");
   }
 
+  // Atomic: optimistic lock on status=SUBMITTED + review record + status change
+  // all in ONE transaction. If a concurrent review already changed the status,
+  // the updateMany returns count=0 and we throw.
   await db.$transaction(async (tx) => {
+    // Create the review record first (inside the transaction).
     await tx.opportunityReview.create({
       data: {
         opportunityId: input.opportunityId,
@@ -231,23 +236,34 @@ export async function reviewOpportunity(input: ReviewOpportunityInput) {
       },
     });
 
-    if (input.action === "APPROVE") {
-      await tx.opportunity.update({
-        where: { id: input.opportunityId },
-        data: { status: "PUBLISHED", publishedAt: new Date() },
-      });
-    } else if (input.action === "REJECT") {
-      await tx.opportunity.update({
-        where: { id: input.opportunityId },
-        data: { status: "CANCELLED", cancelledAt: new Date() },
-      });
-    } else if (input.action === "REQUEST_REVISION") {
-      await tx.opportunity.update({
-        where: { id: input.opportunityId },
-        data: { status: "NEEDS_REVISION" },
-      });
+    // Optimistic lock: only update if status is still SUBMITTED.
+    const statusMap = {
+      APPROVE: { status: "PUBLISHED", publishedAt: new Date() },
+      REJECT: { status: "CANCELLED", cancelledAt: new Date() },
+      REQUEST_REVISION: { status: "NEEDS_REVISION" },
+    } as const;
+
+    const updated = await tx.opportunity.updateMany({
+      where: { id: input.opportunityId, status: "SUBMITTED" },
+      data: statusMap[input.action],
+    });
+
+    if (updated.count === 0) {
+      throw new ConflictError("Opportunity is no longer in SUBMITTED status (concurrent review)");
     }
   });
+
+  // Send notifications (outside the transaction — non-critical).
+  if (input.action === "APPROVE") {
+    await notify(opp.createdById, "opportunity.published", "Opportunity Published",
+      `Your opportunity "${opp.title}" has been published.`);
+  } else if (input.action === "REQUEST_REVISION") {
+    await notify(opp.createdById, "opportunity.revision_requested", "Revision Requested",
+      `Your opportunity "${opp.title}" needs revision. Reason: ${input.reason}`);
+  } else if (input.action === "REJECT") {
+    await notify(opp.createdById, "opportunity.rejected", "Opportunity Rejected",
+      `Your opportunity "${opp.title}" was rejected. Reason: ${input.reason}`);
+  }
 
   logger.info("opportunities.reviewed", {
     opportunityId: input.opportunityId,
@@ -292,6 +308,9 @@ export async function applyForOpportunity(
       },
     });
     logger.info("opportunities.applied", { applicationId: application.id, opportunityId, applicantId });
+    // Notify the opportunity creator.
+    await notify(opp.createdById, "application.submitted", "New Application",
+      `A new application was submitted for "${opp.title}".`);
     return application;
   } catch (e: unknown) {
     if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
@@ -380,8 +399,10 @@ export async function decideApplication(
     }
   }
 
-  await db.opportunityApplication.update({
-    where: { id: applicationId },
+  // Atomic: optimistic lock on status IN (SUBMITTED, UNDER_REVIEW).
+  // Prevents concurrent decisions on the same application.
+  const updated = await db.opportunityApplication.updateMany({
+    where: { id: applicationId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
     data: {
       status: decision,
       decisionReason: reason,
@@ -389,6 +410,18 @@ export async function decideApplication(
       decidedAt: new Date(),
     },
   });
+
+  if (updated.count === 0) {
+    throw new ConflictError("Application is no longer in a decidable status (concurrent decision)");
+  }
+
+  // Notify the applicant.
+  await notify(
+    application.applicantId,
+    `application.${decision.toLowerCase()}`,
+    decision === "ACCEPTED" ? "Application Accepted" : "Application Rejected",
+    `Your application for "${application.opportunity.title}" was ${decision.toLowerCase()}. Reason: ${reason}`,
+  );
 
   logger.info("opportunities.application_decided", { applicationId, decision, decisionMakerId });
 }
@@ -407,5 +440,13 @@ export async function withdrawApplication(applicationId: string, applicantId: st
     where: { id: applicationId },
     data: { status: "WITHDRAWN", withdrawnAt: new Date() },
   });
+  // Notify the opportunity creator.
+  await notify(
+    application.opportunityId ? (await db.opportunity.findUnique({ where: { id: application.opportunityId }, select: { createdById: true, title: true } }))?.createdById ?? "" : "",
+    "application.withdrawn",
+    "Application Withdrawn",
+    `An application was withdrawn for your opportunity.`,
+  );
+
   logger.info("opportunities.application_withdrawn", { applicationId, applicantId });
 }

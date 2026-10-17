@@ -68,9 +68,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
           </Card>
         )}
 
-        {(isCreator || isReviewer || isAdmin) && (
-          <OpportunityDetailActions opportunityId={opp.id} status={opp.status} isCreator={isCreator} canReview={isReviewer || isAdmin} />
-        )}
+        <OpportunityDetailActions
+          opportunityId={opp.id}
+          status={opp.status}
+          isCreator={isCreator}
+          canReview={isReviewer || isAdmin}
+          canApply={!!session?.user?.id && !isCreator && opp.status === "PUBLISHED"}
+        />
       </div>
     </div>
   );

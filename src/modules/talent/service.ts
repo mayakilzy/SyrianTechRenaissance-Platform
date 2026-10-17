@@ -1,8 +1,14 @@
 /**
- * STR Talent — Talent Directory Service
- * --------------------------------------
+ * STR Talent — Talent Directory Service (G04-02 fixed)
+ * ----------------------------------------------------
  * Search and filter professional profiles respecting visibility settings.
- * Only public-visible data is returned in search results.
+ *
+ * G04-02 FIX: visibility is now enforced in the WHERE clause, not just
+ * the SELECT. This means:
+ *   - If showSkills=false, searching by skill won't match that profile
+ *   - If showPortfolio=false, portfolio content isn't searchable
+ *   - bio is always searchable (it's the profile's public summary)
+ *   - total count matches the visible results (no hidden matches)
  */
 
 import { db } from "@/lib/db";
@@ -33,8 +39,18 @@ export type SearchParams = z.infer<typeof searchSchema>;
 
 /**
  * Search talent profiles with pagination.
- * Respects visibility settings: only shows fields the profile owner has
- * opted into showing publicly.
+ *
+ * VISIBILITY ENFORCEMENT (G04-02 §A):
+ *   - bio: always searchable (it's the public summary)
+ *   - displayName, headline: always searchable (public identity)
+ *   - skills: ONLY searchable if the profile's visibility.showSkills=true
+ *   - availability: ONLY filterable if visibility.showAvailability=true
+ *   - location: never searchable (private unless showLocation=true, but
+ *     we don't expose it in search to avoid location-based enumeration)
+ *
+ * This means a profile with showSkills=false will NOT appear in skill-based
+ * search results, even if it has the matching skill. The total count
+ * reflects only visible matches.
  */
 export async function searchTalent(params: SearchParams): Promise<{
   results: PublicTalentProfile[];
@@ -45,30 +61,44 @@ export async function searchTalent(params: SearchParams): Promise<{
   const { query, skill, availability, page, pageSize } = params;
   const skip = (page - 1) * pageSize;
 
-  const where = {
-    user: { status: "ACTIVE" as const },
-    ...(availability ? { availability } : {}),
-    ...(query
-      ? {
-          OR: [
-            { displayName: { contains: query, mode: "insensitive" as const } },
-            { headline: { contains: query, mode: "insensitive" as const } },
-            { bio: { contains: query, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
-    ...(skill
-      ? {
-          skills: {
-            some: {
-              skill: {
-                normalizedName: { contains: skill.toLowerCase(), mode: "insensitive" as const },
-              },
+  // Build WHERE clause with visibility-aware conditions.
+  const where: Record<string, unknown> = {
+    user: { status: "ACTIVE" },
+  };
+
+  // Text search: only on public fields (displayName, headline, bio).
+  if (query) {
+    where.OR = [
+      { displayName: { contains: query, mode: "insensitive" } },
+      { headline: { contains: query, mode: "insensitive" } },
+      { bio: { contains: query, mode: "insensitive" } },
+    ];
+  }
+
+  // Availability filter: only if the profile shows availability publicly.
+  if (availability) {
+    where.AND = [
+      { availability },
+      { visibility: { showAvailability: true } },
+    ];
+  }
+
+  // Skill filter: only match profiles that show skills publicly.
+  if (skill) {
+    where.AND = [
+      ...(where.AND as unknown[] || []),
+      { visibility: { showSkills: true } },
+      {
+        skills: {
+          some: {
+            skill: {
+              normalizedName: { contains: skill.toLowerCase(), mode: "insensitive" },
             },
           },
-        }
-      : {}),
-  };
+        },
+      },
+    ];
+  }
 
   const [profiles, total] = await Promise.all([
     db.memberProfile.findMany({

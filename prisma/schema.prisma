@@ -61,6 +61,7 @@ model User {
   opportunitiesCreated    Opportunity[]            @relation("OpportunityCreator")
   opportunityReviews      OpportunityReview[]      @relation("OpportunityReviewer")
   opportunityApplications OpportunityApplication[] @relation("OpportunityApplicant")
+  notifications           Notification[]
 
   @@index([email])
 }
@@ -786,4 +787,22 @@ enum ApplicationStatus {
   ACCEPTED // accepted
   REJECTED // rejected with reason
   WITHDRAWN // applicant withdrew
+}
+
+// ------------------------------------------------------------
+// Notifications (module: communications) — G04-02 §D
+// ------------------------------------------------------------
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String // recipient
+  type      String // "opportunity.published" | "opportunity.revision_requested" | "application.accepted" | "application.rejected" | "application.withdrawn" | "application.submitted"
+  title     String
+  body      String    @db.Text
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
 }

@@ -191,6 +191,17 @@
     "typeMentorship": "إرشاد",
     "typeInternship": "تدريب",
     "typeConsulting": "استشارة",
-    "typeOther": "أخرى"
+    "typeOther": "أخرى",
+    "coverNote": "رسالة التقديم",
+    "coverNotePlaceholder": "أخبر صاحب الفرصة لماذا أنت مناسب...",
+    "confirmApply": "تقديم الطلب",
+    "cancel": "إلغاء",
+    "editOpportunity": "تعديل",
+    "myApplications": "طلباتي",
+    "reviewApplications": "مراجعة الطلبات",
+    "accept": "قبول",
+    "decline": "رفض",
+    "withdraw": "انسحاب",
+    "qualificationNotes": "ملاحظات التأهيل (خاصة)"
   }
 }
