@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
+  // Native modules (Argon2) must stay external — they use Rust binaries
+  // that Turbopack can't bundle for the server runtime.
+  serverExternalPackages: ["@node-rs/argon2"],
   typescript: {
     // Type safety is enforced separately via `tsc --noEmit` in CI;
     // do not silently ignore build errors.
