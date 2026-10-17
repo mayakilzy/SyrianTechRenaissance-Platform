@@ -265,6 +265,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     await signin(stewardPage, STEWARD_EMAIL, "StewardPass123!");
     const stewardId = await getUserId(stewardPage);
     const reviewerId = await getUserId(reviewerPage);
+    console.log(`[DIAG] stewardId=${stewardId}, reviewerId=${reviewerId}`);
     expect(stewardId).not.toBe(reviewerId); // separation of duties
 
     // ── Step 6: Reviewer approves with qualified steward ──
@@ -365,6 +366,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     const stewardPage = await stewardCtx.newPage();
     await signin(stewardPage, STEWARD_EMAIL, "StewardPass123!");
     const stewardId = await getUserId(stewardPage);
+    console.log(`[DIAG] scope-change stewardId=${stewardId}`);
 
     // Reviewer approves.
     const reviewerCtx = await browser.newContext();
