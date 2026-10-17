@@ -62,6 +62,14 @@ model User {
   opportunityReviews      OpportunityReview[]      @relation("OpportunityReviewer")
   opportunityApplications OpportunityApplication[] @relation("OpportunityApplicant")
   notifications           Notification[]
+  // G05 relations — Project Execution and Deliverables
+  tasksAssigned           Task[]                   @relation("TaskAssignee")
+  tasksAssignedBy         Task[]                   @relation("TaskAssigner")
+  deliverablesSubmitted   Deliverable[]            @relation("DeliverableSubmitter")
+  deliverableReviews      DeliverableReview[]      @relation("DeliverableReviewer")
+  contributionsMade       ContributionReference[]  @relation("ContributionContributor")
+  contributionsAccepted   ContributionReference[]  @relation("ContributionAccepter")
+  filesUploaded           FileEvidence[]           @relation("FileUploader")
 
   @@index([email])
 }
@@ -528,24 +536,36 @@ model Project {
   // Created atomically when a proposal is approved. Exactly one project per
   // approved proposal (unique constraint). The atomic approval transaction
   // creates Project + Team + StewardAssignment + Lead membership together.
-  id          String        @id @default(cuid())
-  proposalId  String        @unique // one project per approved proposal
-  leadId      String
-  stewardId   String // institutional steward (required, non-null)
-  title       String
-  status      ProjectStatus @default(ACTIVE)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  suspendedAt DateTime?
-  cancelledAt DateTime?
+  id                          String        @id @default(cuid())
+  proposalId                  String        @unique // one project per approved proposal
+  leadId                      String
+  stewardId                   String // institutional steward (required, non-null)
+  title                       String
+  status                      ProjectStatus @default(ACTIVE)
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+  suspendedAt                 DateTime?
+  cancelledAt                 DateTime?
+  // G05 — Two-phase completion approval (lead first, steward second).
+  // Lead approves (sets leadApprovedCompletionAt) → steward approves
+  // (sets stewardApprovedCompletionAt + completedAt + status=COMPLETED atomically).
+  // Anti-self-approval: lead !== steward is enforced by STR-GOV-TEAM-01 + service layer.
+  leadApprovedCompletionAt    DateTime?
+  stewardApprovedCompletionAt DateTime?
+  completedAt                 DateTime?
 
-  proposal       ProjectProposal  @relation(fields: [proposalId], references: [id])
-  lead           User             @relation("ProjectLead", fields: [leadId], references: [id])
-  steward        User             @relation("ProjectSteward", fields: [stewardId], references: [id])
+  proposal       ProjectProposal         @relation(fields: [proposalId], references: [id])
+  lead           User                    @relation("ProjectLead", fields: [leadId], references: [id])
+  steward        User                    @relation("ProjectSteward", fields: [stewardId], references: [id])
   team           Team?
   memberships    TeamMembership[]
   resourceGrants ResourceGrant[]
   opportunities  Opportunity[]
+  // G05 relations
+  milestones     Milestone[]
+  tasks          Task[]
+  contributions  ContributionReference[]
+  fileEvidence   FileEvidence[]
 
   @@index([leadId])
   @@index([stewardId])
@@ -656,6 +676,249 @@ model ResourceGrant {
 
   @@index([projectId])
   @@index([grantType])
+}
+
+// ============================================================
+// G05 — Project Execution and Deliverables
+// ============================================================
+
+// ------------------------------------------------------------
+// Milestones (module: projects)
+// ------------------------------------------------------------
+
+model Milestone {
+  // Major project checkpoints. Created by lead or steward. Optional dueDate.
+  // Lifecycle: PLANNED → IN_PROGRESS → COMPLETED | CANCELLED.
+  id          String          @id @default(cuid())
+  projectId   String
+  title       String
+  description String          @db.Text
+  status      MilestoneStatus @default(PLANNED)
+  dueDate     DateTime? // optional per MASTER decision §5
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+enum MilestoneStatus {
+  PLANNED // created, not yet started
+  IN_PROGRESS // actively being worked on
+  COMPLETED // all required tasks/deliverables accepted
+  CANCELLED // cancelled by lead or steward
+}
+
+// ------------------------------------------------------------
+// Tasks (module: projects)
+// ------------------------------------------------------------
+
+model Task {
+  // Work item assigned to a team member by the lead or steward.
+  // Lifecycle: ASSIGNED → IN_PROGRESS → SUBMITTED → (CHANGES_REQUESTED → SUBMITTED)*
+  //            → ACCEPTED | REJECTED | WITHDRAWN
+  id           String     @id @default(cuid())
+  projectId    String
+  milestoneId  String? // optional link to a milestone
+  assigneeId   String // team member who executes
+  assignedById String // lead or steward who assigns
+  title        String
+  description  String     @db.Text
+  status       TaskStatus @default(ASSIGNED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  acceptedAt   DateTime? // assignee acknowledged the assignment (ASSIGNED → IN_PROGRESS)
+  submittedAt  DateTime? // latest submission timestamp
+  withdrawnAt  DateTime? // assignee withdrew
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone    Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  assignee     User          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Cascade)
+  assignedBy   User          @relation("TaskAssigner", fields: [assignedById], references: [id], onDelete: Cascade)
+  deliverables Deliverable[]
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([assignedById])
+  @@index([status])
+  @@index([milestoneId])
+}
+
+enum TaskStatus {
+  ASSIGNED // lead/steward assigned; assignee hasn't acknowledged yet
+  IN_PROGRESS // assignee accepted and is working
+  SUBMITTED // assignee submitted a deliverable for review
+  CHANGES_REQUESTED // reviewer requested changes; assignee can resubmit
+  ACCEPTED // reviewer accepted the latest deliverable version
+  REJECTED // reviewer rejected the deliverable (terminal)
+  WITHDRAWN // assignee withdrew (terminal — separate from CANCELLED which is admin-side)
+}
+
+// ------------------------------------------------------------
+// Deliverables + Versions + Reviews (module: projects)
+// ------------------------------------------------------------
+
+model Deliverable {
+  // One per task. Holds a sequence of immutable versions submitted by the assignee.
+  // The current version counter advances on each new submission.
+  // status reflects the latest review action.
+  id             String            @id @default(cuid())
+  taskId         String
+  submitterId    String // must be the task's assignee
+  currentVersion Int               @default(0) // 0 = no versions yet; 1+ = submitted versions count
+  status         DeliverableStatus @default(DRAFT)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  submittedAt    DateTime? // first submission timestamp
+  acceptedAt     DateTime? // final acceptance timestamp (one per deliverable)
+
+  task         Task                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  submitter    User                   @relation("DeliverableSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  versions     DeliverableVersion[]
+  reviews      DeliverableReview[]
+  contribution ContributionReference?
+
+  @@index([taskId])
+  @@index([submitterId])
+  @@index([status])
+}
+
+model DeliverableVersion {
+  // IMMUTABLE after creation (per MASTER architectural constraint §4).
+  // Each resubmission creates a new row with incremented versionNumber.
+  // The artifactPath references FileEvidence (which itself enforces scan status).
+  // Reviewers approve a specific version; resubmission creates a new version
+  // for review — the previously-approved version is NOT overwritten.
+  id             String   @id @default(cuid())
+  deliverableId  String
+  versionNumber  Int // monotonic: 1, 2, 3, ...
+  // For textual deliverables (G05 fallback per MASTER §1): content stored inline.
+  textContent    String?  @db.Text
+  // For file-backed deliverables: opaque reference to FileEvidence (scan-gated).
+  fileEvidenceId String?
+  notes          String   @db.Text // submitter's notes for this version
+  submittedAt    DateTime @default(now())
+
+  deliverable  Deliverable   @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  fileEvidence FileEvidence? @relation(fields: [fileEvidenceId], references: [id], onDelete: SetNull)
+
+  @@unique([deliverableId, versionNumber]) // version number unique per deliverable
+  @@index([deliverableId])
+}
+
+model DeliverableReview {
+  // Audit trail of review actions. One row per review action.
+  // Prevents conflicting reviews via optimistic lock on Deliverable.status
+  // + unique partial index: only one review per (deliverableId, versionNumber)
+  // — enforced at service layer since PG partial unique indexes on (status=accepted)
+  // are awkward; instead service layer uses transaction + status check.
+  id              String                  @id @default(cuid())
+  deliverableId   String
+  reviewerId      String // lead or steward (not the submitter)
+  versionNumber   Int // which version was reviewed
+  action          DeliverableReviewAction
+  reason          String                  @db.Text
+  attributionText String?                 @db.Text // finalized attribution text (only on ACCEPT)
+  decidedAt       DateTime                @default(now())
+
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  reviewer    User        @relation("DeliverableReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  // One review action per (deliverable, version) — prevents conflicting reviews
+  // of the same version by different reviewers or by the same reviewer twice.
+  @@unique([deliverableId, versionNumber])
+  @@index([deliverableId])
+  @@index([reviewerId])
+  @@index([versionNumber])
+}
+
+enum DeliverableStatus {
+  DRAFT // created but no version submitted yet
+  SUBMITTED // current version submitted, awaiting review
+  IN_REVIEW // reviewer started reviewing (informational; SUBMITTED is the trigger)
+  CHANGES_REQUESTED // reviewer asked for changes; assignee can resubmit
+  ACCEPTED // reviewer accepted — contribution reference recorded
+  REJECTED // reviewer rejected (terminal)
+  WITHDRAWN // submitter withdrew the deliverable (terminal)
+}
+
+enum DeliverableReviewAction {
+  REQUEST_CHANGES // ask for revisions
+  ACCEPT // accept this version → create ContributionReference
+  REJECT // reject this version (terminal for the deliverable)
+}
+
+// ------------------------------------------------------------
+// Contribution References (module: projects) — attribution hook
+// ------------------------------------------------------------
+
+model ContributionReference {
+  // Created when a deliverable version is accepted. Attribution only —
+  // does NOT transfer or assign IP rights (per MASTER decision §4).
+  // Auto-generated from contribution facts; reviewer can finalize text.
+  // One per accepted deliverable (unique on deliverableId).
+  id              String   @id @default(cuid())
+  deliverableId   String   @unique // one accepted version per deliverable
+  projectId       String
+  contributorId   String // the assignee who submitted the accepted version
+  acceptedById    String // the reviewer who accepted (lead or steward)
+  acceptedVersion Int // version number that was accepted
+  attributionText String   @db.Text // human-readable attribution
+  acceptedAt      DateTime @default(now())
+
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contributor User        @relation("ContributionContributor", fields: [contributorId], references: [id], onDelete: Cascade)
+  acceptedBy  User        @relation("ContributionAccepter", fields: [acceptedById], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([contributorId])
+  @@index([acceptedById])
+}
+
+// ------------------------------------------------------------
+// File Evidence (module: projects) — minimal G05, full scanner in G07
+// ------------------------------------------------------------
+
+model FileEvidence {
+  // Safe-storage reference. scanStatus enforces fail-closed policy:
+  // PENDING files CANNOT be read, downloaded, or used as accepted evidence.
+  // No manual/UI promotion to CLEAN — only the scanner (G07) can transition.
+  // Authorized read URLs are issued ONLY when scanStatus === CLEAN.
+  id           String         @id @default(cuid())
+  projectId    String
+  uploadedById String
+  storageKey   String // opaque key in safe object storage
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  scanStatus   FileScanStatus @default(PENDING)
+  scannedAt    DateTime?
+  scanError    String?        @db.Text
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy          User                 @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  deliverableVersions DeliverableVersion[]
+
+  @@index([projectId])
+  @@index([scanStatus])
+  @@index([uploadedById])
+}
+
+enum FileScanStatus {
+  PENDING // uploaded, not yet scanned — CANNOT be read or accepted
+  CLEAN // scanned, no threats found — can be referenced and read
+  INFECTED // scanner found a threat — must NOT be read or accepted
+  SCAN_FAILED // scanner error — treated like PENDING (fail-closed)
 }
 
 // ============================================================
