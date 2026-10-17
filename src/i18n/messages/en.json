@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "appName": "Syrian Tech Renaissance",
+    "appNameShort": "STR",
+    "tagline": "Syrian in origin and mission, global in openness and collaboration"
+  },
+  "nav": {
+    "home": "Home",
+    "mission": "Mission",
+    "fields": "Fields",
+    "opportunities": "Opportunities",
+    "join": "Join",
+    "contact": "Contact"
+  },
+  "home": {
+    "heroTitle": "Building Capability, Creating Opportunity",
+    "heroSubtitle": "A Syrian institutional platform that brings together tech talent, projects, and partnerships in a productive, neutral workspace.",
+    "heroCtaPrimary": "Read the mission",
+    "heroCtaSecondary": "Propose a project",
+    "pillarsTitle": "Four axes of renaissance",
+    "pillarsSubtitle": "We turn skills into productive teams, and projects into measurable impact.",
+    "pillarEconomic": "Economic & Commercial",
+    "pillarEconomicDesc": "Professional opportunities, contracts, and partnerships that benefit participants.",
+    "pillarDevelopmental": "Developmental",
+    "pillarDevelopmentalDesc": "Projects that reinvest in Syrian education and infrastructure.",
+    "pillarEducational": "Educational",
+    "pillarEducationalDesc": "Hands-on learning and collaborative engineering within real teams.",
+    "pillarEngineering": "Engineering & Productive",
+    "pillarEngineeringDesc": "Sustained technical production under clear professional governance.",
+    "principlesTitle": "Principles we uphold",
+    "principleNeutral": "Political, religious, sectarian, and party neutrality",
+    "principleNeutralDesc": "Collaboration is governed by expertise, work, and integrity — not loyalty.",
+    "principleGovernance": "Team governance through approved projects",
+    "principleGovernanceDesc": "No operational team without an approved charter, lead, and institutional steward.",
+    "principleIntegration": "Real integrations, not fake facades",
+    "principleIntegrationDesc": "We build a trustworthy integration core; we do not advertise untested connectors as live.",
+    "principleEvidence": "Evidence before claims",
+    "principleEvidenceDesc": "Real browser tests are the acceptance bar — unit tests alone are not enough.",
+    "statusTitle": "Platform status",
+    "statusG01": "Current mission: G01 — Foundation and Architecture Fitness",
+    "statusNote": "This is a foundation page. Auth, Google sign-in, and integrations are not yet active."
+  },
+  "footer": {
+    "rights": "© 2026 Syrian Tech Renaissance. All rights reserved.",
+    "builtWith": "Built on Next.js, TypeScript, and PostgreSQL",
+    "localeSwitch": "العربية"
+  },
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundDesc": "The URL is incorrect or no longer available.",
+    "notFoundCta": "Back to home",
+    "errorTitle": "An unexpected error occurred",
+    "errorDesc": "We hit a problem handling your request. The error has been logged and will be reviewed.",
+    "errorCta": "Try again"
+  },
+  "health": {
+    "title": "System status",
+    "status": "Status",
+    "ok": "OK",
+    "version": "Version",
+    "locale": "Locale",
+    "time": "Time"
+  }
+}

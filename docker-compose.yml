@@ -1,0 +1,106 @@
+# ============================================================
+# STR Platform — Local Development Stack (ADR-01 + ADR-02)
+# ------------------------------------------------------------
+# Brings up PostgreSQL + the STR app + the background worker.
+# The worker uses the SAME image as the app (ADR-02: modular monolith,
+# outbox worker in the same codebase).
+#
+# Usage:
+#   docker compose up -d postgres        # just the DB
+#   docker compose up -d                 # full stack
+#   docker compose run --rm app bunx prisma migrate dev
+#   docker compose run --rm app bun run db:seed
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: str-postgres
+    environment:
+      POSTGRES_USER: str
+      POSTGRES_PASSWORD: str_password
+      POSTGRES_DB: str_platform
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    ports:
+      - "5432:5432"
+    volumes:
+      - str-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U str -d str_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Secondary database used by Prisma as the shadow database for migration
+  # development. Created automatically by the postgres image entrypoint.
+  postgres-shadow:
+    image: postgres:17-alpine
+    container_name: str-postgres-shadow
+    environment:
+      POSTGRES_USER: str
+      POSTGRES_PASSWORD: str_password
+      POSTGRES_DB: str_platform_shadow
+    ports:
+      - "5433:5432"
+    volumes:
+      - str-pgdata-shadow:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U str -d str_platform_shadow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: str-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://str:str_password@postgres:5432/str_platform?schema=public
+      DATABASE_SHADOW_URL: postgresql://str:str_password@postgres-shadow:5432/str_platform_shadow?schema=public
+      AUTH_TRUST_HOST: "true"
+      LOG_FORMAT: pretty
+      LOG_LEVEL: debug
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: bun run dev
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: str-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://str:str_password@postgres:5432/str_platform?schema=public
+      DATABASE_SHADOW_URL: postgresql://str:str_password@postgres-shadow:5432/str_platform_shadow?schema=public
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      STR_WORKER: "true"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    # The worker entrypoint is added in G07; for G01 we just keep the process
+    # alive so the service is healthy and the topology is demonstrable.
+    command: bun run src/worker/keepalive.ts
+    restart: unless-stopped
+
+volumes:
+  str-pgdata:
+  str-pgdata-shadow:

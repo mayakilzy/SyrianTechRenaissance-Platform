@@ -1,0 +1,264 @@
+// ============================================================
+// STR Platform v1.0 — Prisma Schema (G01 baseline)
+// ------------------------------------------------------------
+// Provider: PostgreSQL (ADR-01). SQLite is NOT supported in production.
+// The schema covers the G01 scope only:
+//   - Identity foundation (User, AuthIdentity, EmailVerification, AuditEvent)
+//   - Integration Core entities (Provider, Capability, Connection, Job, Event)
+// Full domain entities (Proposals, Teams, Projects, Opportunities, etc.)
+// land in G02–G06 with their own migrations.
+//
+// Invariants encoded here mirror 03-Data-and-Permissions §"Required database
+// invariants". Do not loosen a constraint without an ADR.
+// ============================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("DATABASE_SHADOW_URL")
+  relationMode = "foreignKeys"
+}
+
+// ------------------------------------------------------------
+// Identity (module: identity)
+// ------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified DateTime?
+  displayName   String?
+  locale        String   @default("ar")
+  status        UserStatus @default(UNVERIFIED)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  authIdentities   AuthIdentity[]
+  auditEvents      AuditEvent[]
+  connections      IntegrationConnection[]
+  initiatedJobs    IntegrationJob[]     @relation("JobInitiator")
+  consentRecords   ConsentRecord[]
+
+  @@index([email])
+}
+
+enum UserStatus {
+  UNVERIFIED   // registered but email not verified
+  ACTIVE       // verified, in good standing
+  SUSPENDED    // governance suspension
+  DELETED      // soft-deleted; data retained per policy
+}
+
+model AuthIdentity {
+  // STR-06 + 03-Data §invariant 1: (provider, providerSub) globally unique.
+  // Email is normalized but NEVER trusted as the sole external identity key.
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   // "password" | "google" | future OIDC providers
+  providerSub  String   // immutable provider id (e.g. Google `sub`)
+  emailAtLink  String   // email at the time of linking (audit only)
+  linkedAt     DateTime @default(now())
+  unlinkedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSub])
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique // store hash, never the raw token
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+// ------------------------------------------------------------
+// Audit (module: governance) — minimal G01 subset
+// ------------------------------------------------------------
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  actorId     String?  // null for system events
+  action      String   // e.g. "user.register", "integration.job.submit"
+  targetType  String   // e.g. "User", "IntegrationJob"
+  targetId    String?
+  outcome     String   // "success" | "failure" | "denied"
+  reason      String?
+  reqId       String?  // correlation id
+  meta        Json?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@index([reqId])
+}
+
+// ------------------------------------------------------------
+// Integration Core (module: integrations) — ADR-04
+// ------------------------------------------------------------
+
+model IntegrationProvider {
+  // G01 stores the static registry; G07 adds the governance approval flow.
+  id            String   @id // stable slug+version, e.g. "str.mock.v1"
+  slug          String
+  version       String
+  displayName   String
+  description   String
+  owner         String
+  baseOrigin    String
+  trustStatus   String   @default("registered") // ProviderTrustStatus
+  authMode      Json
+  webhookSigning Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  capabilities  IntegrationCapability[]
+  connections   IntegrationConnection[]
+
+  @@unique([slug, version])
+  @@index([trustStatus])
+}
+
+model IntegrationCapability {
+  id              String   @id @default(cuid())
+  providerId      String
+  code            String   // namespaced, e.g. "application.test"
+  summary         String
+  executionMode   String   // "sync" | "async"
+  riskClass       String   // "low" | "medium" | "high" | "critical"
+  requiredScopes  String[] // PostgreSQL native array
+  inputSchemaRef  String
+  outputSchemaRef String
+  idempotent      Boolean  @default(false)
+  cancelable      Boolean  @default(false)
+  timeoutMs       Int
+  createdAt       DateTime @default(now())
+
+  provider IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, code])
+  @@index([code])
+}
+
+model IntegrationConnection {
+  // 03-Data §invariant 8: credentials stored via CredentialReference, never
+  // plaintext in exposed queries. This model holds only the reference id.
+  id                  String   @id @default(cuid())
+  providerId          String
+  subjectKind         String   // "user" | "project" | "organization"
+  subjectId           String
+  credentialReferenceId String
+  status              String   @default("pending") // ConnectionStatus
+  scopes              String[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  revokedAt           DateTime?
+
+  provider        IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user            User?               @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  jobs            IntegrationJob[]
+  consentRecords  ConsentRecord[]
+
+  @@unique([providerId, subjectKind, subjectId])
+  @@index([subjectKind, subjectId])
+}
+
+model ConsentRecord {
+  id           String   @id @default(cuid())
+  connectionId String
+  grantedBy    String   // actor id
+  scopes       String[]
+  evidence     String   // "explicit_consent" | "governance_approval"
+  at           DateTime @default(now())
+
+  connection IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [grantedBy], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+}
+
+model IntegrationJob {
+  // 03-Data §invariant 9: job belongs to a connection AND authorized subject.
+  // Project suspension / grant revocation blocks new jobs (enforced in service).
+  id              String   @id @default(cuid())
+  connectionId    String
+  capability      String
+  initiatorId     String?
+  subjectKind     String
+  subjectId       String
+  status          String   @default("queued") // IntegrationJobStatus
+  idempotencyKey  String
+  payload         Json
+  result          Json?
+  failureCategory String?
+  failureMessage  String?
+  retryable       Boolean?
+  createdAt       DateTime @default(now())
+  queuedAt        DateTime @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  connection IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  initiator  User?                  @relation("JobInitiator", fields: [initiatorId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, idempotencyKey])
+  @@index([status, queuedAt])
+  @@index([subjectKind, subjectId])
+}
+
+model IntegrationEvent {
+  // 03-Data §invariant 10: dedupe by (providerId, providerEventId).
+  id              String   @id @default(cuid())
+  providerId      String
+  providerEventId String
+  connectionId    String?
+  jobId           String?
+  type            String
+  payload         Json
+  signatureValid  Boolean
+  receivedAt      DateTime @default(now())
+
+  @@unique([providerId, providerEventId])
+  @@index([jobId])
+}
+
+model CredentialReference {
+  // The actual secret is stored in a key manager (ADR-04). This row holds only
+  // the metadata needed to locate and rotate it.
+  id              String   @id @default(cuid())
+  encryptionKeyId String
+  cipherPreview   String   // non-sensitive fingerprint for audit logs
+  rotatedAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([encryptionKeyId])
+}
+
+// ------------------------------------------------------------
+// Outbox (ADR-02) — durable job dispatch
+// ------------------------------------------------------------
+
+model OutboxEvent {
+  id          String   @id @default(cuid())
+  aggregate   String   // e.g. "integration.job"
+  aggregateId String
+  type        String   // e.g. "integration.job.submitted"
+  payload     Json
+  dispatchedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([dispatchedAt])
+  @@index([aggregate, aggregateId])
+}

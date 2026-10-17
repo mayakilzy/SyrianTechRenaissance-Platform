@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "appName": "النهضة التقنية السورية",
+    "appNameShort": "STR",
+    "tagline": "مبادرة سورية المنشأ والرسالة، عالمية الانفتاح والتعاون"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "mission": "الرسالة",
+    "fields": "المجالات",
+    "opportunities": "الفرص",
+    "join": "انضم إلينا",
+    "contact": "تواصل"
+  },
+  "home": {
+    "heroTitle": "نبني القدرة، ونصنع الفرصة",
+    "heroSubtitle": "منصة مؤسسية سورية تجمع المواهب التقنية والمشاريع والشراكات في فضاء عمل منتج ومحايد.",
+    "heroCtaPrimary": "تعرّف على الرسالة",
+    "heroCtaSecondary": "اقترح مشروعاً",
+    "pillarsTitle": "أربعة محاور للنهضة",
+    "pillarsSubtitle": "نحوّل المهارات إلى فرق منتجة، والمشاريع إلى نتائج ذات أثر.",
+    "pillarEconomic": "اقتصادي وتجاري",
+    "pillarEconomicDesc": "فرص مهنية وعقود وشراكات تعود بالفائدة على المشاركين.",
+    "pillarDevelopmental": "تنموي",
+    "pillarDevelopmentalDesc": "مشاريع تعيد الاستثمار في التعليم والبنية السورية.",
+    "pillarEducational": "تعليمي",
+    "pillarEducationalDesc": "تعلّم عملي وهندسة تعاونية ضمن فرق حقيقية.",
+    "pillarEngineering": "هندسي وإنتاجي",
+    "pillarEngineeringDesc": "إنتاج تقني مستدام وفق حوكمة مهنية واضحة.",
+    "principlesTitle": "مبادئ نلتزم بها",
+    "principleNeutral": "الحياد السياسي والديني والطائفي والحزبي",
+    "principleNeutralDesc": "نحكم التعاون بالخبرة والعمل والنزاهة، لا بالعلاقات أو الولاءات.",
+    "principleGovernance": "حوكمة الفرق عبر المشاريع المعتمدة",
+    "principleGovernanceDesc": "لا فريق تشغيلي بلا وثيقة مشروع معتمدة وقائد ومشرف مؤسسي.",
+    "principleIntegration": "تكاملات حقيقية لا واجهات وهمية",
+    "principleIntegrationDesc": "نبني نواة تكامل موثوقة، ولا نعرض موصلات غير مختبرة كأنها جاهزة.",
+    "principleEvidence": "الأدلة قبل الادعاء",
+    "principleEvidenceDesc": "اختبارات المتصفح الفعلية أساس القبول، لا اختبارات الوحدة وحدها.",
+    "statusTitle": "حالة المنصة",
+    "statusG01": "المهمة الحالية: G01 — التأسيس واختبار المعمارية",
+    "statusNote": "هذه صفحة تأسيسية. المصادقة وتسجيل Google والتكاملات ليست مفعّلة بعد."
+  },
+  "footer": {
+    "rights": "© 2026 النهضة التقنية السورية. جميع الحقوق محفوظة.",
+    "builtWith": "مبني على Next.js وTypeScript وPostgreSQL",
+    "localeSwitch": "English"
+  },
+  "errors": {
+    "notFoundTitle": "الصفحة غير موجودة",
+    "notFoundDesc": "عنوان الصفحة غير صحيح أو لم يعد متاحاً.",
+    "notFoundCta": "العودة إلى الرئيسية",
+    "errorTitle": "حدث خطأ غير متوقع",
+    "errorDesc": "واجهنا مشكلة أثناء معالجة طلبك. تم تسجيل الخطأ وسنراجعه.",
+    "errorCta": "إعادة المحاولة"
+  },
+  "health": {
+    "title": "حالة النظام",
+    "status": "الحالة",
+    "ok": "سليم",
+    "version": "الإصدار",
+    "locale": "اللغة",
+    "time": "الوقت"
+  }
+}
