@@ -109,10 +109,15 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     const reviewerPage = await reviewerCtx.newPage();
     await signin(reviewerPage, REVIEWER_EMAIL, REVIEWER_PASSWORD);
 
-    const reviseRes = await reviewerPage.request.post(`/api/proposals/${proposalId}/review`, {
-      data: { action: "REQUEST_REVISION", reason: "Please add more detail about the mentor selection process and risk mitigation strategy." },
-    });
-    expect(reviseRes.status()).toBe(200);
+    const reviseResult = await reviewerPage.evaluate(async ({ proposalId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REQUEST_REVISION", reason: "Please add more detail about the mentor selection process and risk mitigation strategy." }),
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }, { proposalId });
+    expect(reviseResult.status).toBe(200);
 
     // ── Step 5: Proposer revises and resubmits ──
     await signin(page, PROPOSER_EMAIL, PASSWORD);
@@ -139,14 +144,19 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     const reviewerId = await getUserId(reviewerPage);
     expect(stewardId).not.toBe(reviewerId);
 
-    const approveRes = await reviewerPage.request.post(`/api/proposals/${proposalId}/review`, {
-      data: {
-        action: "APPROVE",
-        reason: "The revised proposal meets all acceptance criteria. Mentor selection process is clear. Approved for execution.",
-        stewardId, // steward's ID, NOT reviewer's ID
-      },
-    });
-    expect(approveRes.status()).toBe(200);
+    const approveResult = await reviewerPage.evaluate(async ({ proposalId, stewardId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "APPROVE",
+          reason: "The revised proposal meets all acceptance criteria. Mentor selection process is clear. Approved for execution.",
+          stewardId,
+        }),
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }, { proposalId, stewardId });
+    expect(approveResult.status).toBe(200);
     await reviewerCtx.close();
     await stewardCtx.close();
 
@@ -202,12 +212,20 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     const reviewerPage = await reviewerCtx.newPage();
     await signin(reviewerPage, REVIEWER_EMAIL, REVIEWER_PASSWORD);
 
-    const rejectRes = await reviewerPage.request.post(`/api/proposals/${proposalId}/review`, {
-      data: { action: "REJECT", reason: "The proposal lacks clear outcomes, measurable acceptance criteria, and a defined scope. It does not meet the institutional threshold for approval." },
-    });
-    expect(rejectRes.status()).toBe(200);
+    const rejectResult = await reviewerPage.evaluate(async ({ proposalId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REJECT", reason: "The proposal lacks clear outcomes, measurable acceptance criteria, and a defined scope. It does not meet the institutional threshold for approval." }),
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }, { proposalId });
+    expect(rejectResult.status).toBe(200);
 
-    const proposalCheck = await reviewerPage.request.get(`/api/proposals`).then(r => r.json());
+    const proposalCheck = await reviewerPage.evaluate(async () => {
+      const res = await fetch(`/api/proposals`);
+      return await res.json();
+    });
     const rejected = proposalCheck.data.proposals.find((p: { id: string }) => p.id === proposalId);
     expect(rejected.status).toBe("REJECTED");
     await reviewerCtx.close();
@@ -244,10 +262,15 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     await signin(stewardPage, STEWARD_EMAIL, "StewardPass123!");
     const stewardId = await getUserId(stewardPage);
 
-    const approveRes = await reviewerPage.request.post(`/api/proposals/${proposalId}/review`, {
-      data: { action: "APPROVE", reason: "Approved for scope change testing purposes.", stewardId },
-    });
-    expect(approveRes.status()).toBe(200);
+    const approveResult = await reviewerPage.evaluate(async ({ proposalId, stewardId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE", reason: "Approved for scope change testing purposes.", stewardId }),
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }, { proposalId, stewardId });
+    expect(approveResult.status).toBe(200);
     await reviewerCtx.close();
     await stewardCtx.close();
 
