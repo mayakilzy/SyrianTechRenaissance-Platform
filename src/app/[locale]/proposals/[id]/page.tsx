@@ -2,24 +2,70 @@ import { getServerSession } from "next-auth";
 import { getTranslations } from "next-intl/server";
 import { setRequestLocale } from "next-intl/server";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAuthOptions } from "@/modules/identity/auth-config";
 import { getProposalById } from "@/modules/proposals/service";
+import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProposalActions } from "./ProposalActions";
 
+/**
+ * STR G03 — Proposal Detail Page (with authorization)
+ *
+ * SECURITY (G03-CLOSURE §C):
+ *   Only the following can view a proposal's full details:
+ *     - The submitter
+ *     - Institutional reviewers (for SUBMITTED proposals in the review queue)
+ *     - Global admins
+ *     - Team members of the approved project (if the proposal is approved)
+ *
+ *   DRAFT proposals are visible only to the submitter.
+ *   Review history is visible to the submitter + reviewers + admins.
+ *
+ * See 03-Data-and-Permissions §"Privacy defaults".
+ */
 export default async function ProposalDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: "proposals" });
   const session = await getServerSession(getAuthOptions());
 
+  if (!session?.user?.id) {
+    redirect(`/${locale}/auth/signin`);
+  }
+
+  const userId = session.user.id;
+
   const proposal = await getProposalById(id);
   if (!proposal) notFound();
 
-  const isOwner = session?.user?.id === proposal.submitterId;
-  const canReview = session?.user?.id && session.user.id !== proposal.submitterId && proposal.status === "SUBMITTED";
+  // ── Authorization ──
+  const isSubmitter = proposal.submitterId === userId;
+  const adminGrant = await db.roleGrant.findFirst({
+    where: { userId, role: "admin", scope: "global", revokedAt: null },
+  });
+  const isAdmin = !!adminGrant;
+  const reviewerGrant = await db.roleGrant.findFirst({
+    where: { userId, role: "reviewer", scope: "global", revokedAt: null },
+  });
+  const isReviewer = !!reviewerGrant;
+  // Check if user is a team member of the approved project.
+  const isTeamMember = proposal.project?.team?.memberships.some(
+    (m) => m.userId === userId && !m.leftAt,
+  ) ?? false;
+
+  // DRAFT proposals: only submitter + admin.
+  if (proposal.status === "DRAFT" && !isSubmitter && !isAdmin) {
+    notFound();
+  }
+
+  // All other proposals: submitter, reviewer, admin, or team member.
+  if (!isSubmitter && !isAdmin && !isReviewer && !isTeamMember) {
+    notFound();
+  }
+
+  const canReview = isReviewer && !isSubmitter && proposal.status === "SUBMITTED";
 
   return (
     <div className="min-h-screen bg-background">
@@ -47,7 +93,7 @@ export default async function ProposalDetailPage({ params }: { params: Promise<{
           </Card>
         )}
 
-        {proposal.reviewDecisions.length > 0 && (
+        {proposal.reviewDecisions.length > 0 && (isSubmitter || isAdmin || isReviewer) && (
           <Card className="mb-6">
             <CardHeader><CardTitle>{t("reviewHistory")}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -73,8 +119,8 @@ export default async function ProposalDetailPage({ params }: { params: Promise<{
           </Card>
         )}
 
-        {(isOwner || canReview) && (
-          <ProposalActions proposalId={proposal.id} status={proposal.status} isOwner={isOwner} canReview={!!canReview} />
+        {(isSubmitter || canReview) && (
+          <ProposalActions proposalId={proposal.id} status={proposal.status} isOwner={isSubmitter} canReview={!!canReview} />
         )}
       </div>
     </div>

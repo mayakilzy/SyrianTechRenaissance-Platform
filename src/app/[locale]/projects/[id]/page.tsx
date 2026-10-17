@@ -2,25 +2,82 @@ import { getServerSession } from "next-auth";
 import { getTranslations } from "next-intl/server";
 import { setRequestLocale } from "next-intl/server";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAuthOptions } from "@/modules/identity/auth-config";
 import { getTeamForProject } from "@/modules/teams/service";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+/**
+ * STR G03 — Project Detail Page (with authorization)
+ *
+ * SECURITY (G03-CLOSURE §C):
+ *   Only the following can view a project's details:
+ *     - The project's team lead
+ *     - The project's steward
+ *     - Team members of this project
+ *     - Global admins
+ *
+ *   Anonymous users are redirected to signin.
+ *   Unauthorized authenticated users get a 403 (notFound to avoid ID enumeration).
+ *
+ * See 03-Data-and-Permissions §"Privacy defaults" and §"Negative testing catalogue".
+ */
 export default async function ProjectDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: "projects" });
   const session = await getServerSession(getAuthOptions());
 
+  // Require authentication.
+  if (!session?.user?.id) {
+    redirect(`/${locale}/auth/signin`);
+  }
+
+  const userId = session.user.id;
+
+  // Fetch the project.
   const project = await db.project.findUnique({
     where: { id },
-    include: { proposal: true, lead: { select: { displayName: true } }, steward: { select: { displayName: true } } },
+    include: {
+      proposal: true,
+      lead: { select: { id: true, displayName: true } },
+      steward: { select: { id: true, displayName: true } },
+      team: {
+        include: {
+          memberships: {
+            where: { leftAt: null },
+            select: { userId: true, role: true },
+          },
+        },
+      },
+    },
   });
+
+  // Use notFound() for both "doesn't exist" and "unauthorized" to prevent
+  // ID enumeration (attacker can't distinguish 404 from 403).
   if (!project) notFound();
 
+  // ── Authorization: check if the user is allowed to view this project ──
+  const isLead = project.leadId === userId;
+  const isSteward = project.stewardId === userId;
+  const isTeamMember = project.team?.memberships.some(
+    (m) => m.userId === userId,
+  ) ?? false;
+
+  // Check global admin role.
+  const adminGrant = await db.roleGrant.findFirst({
+    where: { userId, role: "admin", scope: "global", revokedAt: null },
+  });
+  const isAdmin = !!adminGrant;
+
+  if (!isLead && !isSteward && !isTeamMember && !isAdmin) {
+    // Unauthorized — return notFound to avoid leaking project existence.
+    notFound();
+  }
+
+  // ── Authorized: render the page ──
   const team = await getTeamForProject(id);
 
   return (

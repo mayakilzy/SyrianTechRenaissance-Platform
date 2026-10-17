@@ -253,9 +253,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(charter),
       });
-      const body = await res.json().catch(() => null);
-      console.log(`[DIAG] Revise API: status=${res.status}, body=${JSON.stringify(body)}`);
-      return { status: res.status };
+      return { status: res.status, body: await res.json().catch(() => null) };
     }, {
       proposalId,
       charter: {
@@ -264,7 +262,8 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
         scope: "Web development mentorship: React, Node.js, and PostgreSQL. Mentor selection via skill matching algorithm.",
       },
     });
-    expect(reviseResult2.status).toBe(200);
+    console.log(`[DIAG] Revise result: status=${reviseResult2.status}, body=${JSON.stringify(reviseResult2.body)}`);
+    expect(reviseResult2.status, `Revise failed: ${JSON.stringify(reviseResult2.body)}`).toBe(200);
     await submitProposalViaAPI(proposerPage, proposalId);
 
     // ── Step 5: Get steward ID from STEWARD's session (not reviewer!) ──
@@ -315,12 +314,17 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
-      return { status: res.status };
+      return { status: res.status, body: await res.json().catch(() => null) };
     }, { invitationId });
     expect(acceptResult.status).toBe(200);
 
     // ── Step 10: Verify project page ──
-    await proposerPage.goto(`/projects/${projectId}`);
+    console.log(`[DIAG] Project page URL: /projects/${projectId}`);
+    const projectResponse = await proposerPage.goto(`/projects/${projectId}`);
+    console.log(`[DIAG] Project page HTTP status: ${projectResponse?.status()}`);
+    console.log(`[DIAG] Project page final URL: ${proposerPage.url()}`);
+    const projectPageText = await proposerPage.locator("body").textContent();
+    console.log(`[DIAG] Project page text preview: ${projectPageText?.substring(0, 200)}`);
     await expect(proposerPage.locator("text=E2E Mentorship Program")).toBeVisible({ timeout: 10000 });
 
     await proposerCtx.close();
