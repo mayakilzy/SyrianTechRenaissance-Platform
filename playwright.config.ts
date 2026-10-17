@@ -25,10 +25,13 @@ export default defineConfig({
     },
   ],
   // The dev server is managed externally by the sandbox (see fullstack-dev skill).
-  // For CI, Playwright starts its own web server via the workflow.
+  // For CI, Playwright starts its own web server with NODE_ENV=test so that
+  // the /api/test/last-email route is enabled for E2E token extraction.
+  // In production builds, that route is gated and returns 404 (verified by
+  // the security-negative.spec.ts test).
   webServer: process.env.CI
     ? {
-        command: "bun run dev",
+        command: "NODE_ENV=test bun run dev",
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 60_000,
