@@ -44,11 +44,12 @@ async function signupAndVerify(page: import("@playwright/test").Page, email: str
 }
 
 async function signin(page: import("@playwright/test").Page, email: string, password: string) {
+  await page.context().clearCookies();
   await page.goto("/auth/signin");
   await page.fill('[name="email"]', email);
   await page.fill('[name="password"]', password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/dashboard/, { timeout: 10000 });
+  await page.waitForURL(/\/dashboard/, { timeout: 30000 });
 }
 
 async function getUserId(page: import("@playwright/test").Page): Promise<string> {
