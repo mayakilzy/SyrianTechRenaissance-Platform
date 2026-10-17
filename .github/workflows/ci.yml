@@ -48,7 +48,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://str:str_password@localhost:5432/str_platform?schema=public
       DATABASE_SHADOW_URL: postgresql://str:str_password@localhost:5433/str_platform_shadow?schema=public
-      NODE_ENV: test
       STR_TEST_MODE: "1"
       AUTH_SECRET: ci-placeholder-secret-at-least-16-chars
       LOG_LEVEL: warn
@@ -99,7 +98,6 @@ jobs:
     timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://str:str_password@localhost:5432/str_platform?schema=public
-      NODE_ENV: test
       STR_TEST_MODE: "1"
       AUTH_SECRET: ci-placeholder-secret-at-least-16-chars
       LOG_LEVEL: warn
