@@ -16,7 +16,7 @@ import { extractVerificationUrl, waitForEmail } from "./fixtures/test-emails";
  *   4. Minimal step-by-step test first, then full flow
  */
 
-const PREFIX = `g03e2e-${Date.now()}`;
+const PREFIX = `g03e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const PROPOSER_EMAIL = `${PREFIX}-proposer@str-test.local`;
 const INVITEE_EMAIL = `${PREFIX}-invitee@str-test.local`;
 const PASSWORD = "TestPassword123!";
