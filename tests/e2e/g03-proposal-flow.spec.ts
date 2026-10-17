@@ -455,3 +455,87 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     await proposerCtx.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// G03-POLICY-ACCEPTANCE: HTTP-level DRAFT protection test
+// Tests the REAL GET /api/proposals/[id] route handler (not a mock).
+// ---------------------------------------------------------------------------
+
+test.describe("G03 — DRAFT proposal protection via real HTTP route", () => {
+  test("reviewer CANNOT read another user's DRAFT via GET /api/proposals/[id]", async ({ browser }) => {
+    test.setTimeout(120000);
+
+    // Create a proposer who creates a DRAFT (not submitted).
+    const proposerCtx = await browser.newContext();
+    const proposerPage = await proposerCtx.newPage();
+    const draftEmail = `${PREFIX}-draft-http@str-test.local`;
+    await signupAndVerify(proposerPage, draftEmail, "Draft Owner");
+    await signin(proposerPage, draftEmail, PASSWORD);
+    const draftProposalId = await createProposalViaAPI(proposerPage, "HTTP DRAFT Protection Test");
+    // Do NOT submit — leave as DRAFT.
+
+    // Sign in as reviewer (seeded account).
+    const reviewerCtx = await browser.newContext();
+    const reviewerPage = await reviewerCtx.newPage();
+    await signin(reviewerPage, REVIEWER_EMAIL, REVIEWER_PASSWORD);
+
+    // Reviewer tries to read the DRAFT via the REAL HTTP route.
+    const draftResult = await reviewerPage.evaluate(async ({ proposalId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}`);
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }, { proposalId: draftProposalId });
+    console.log(`[DIAG] Reviewer reads DRAFT: status=${draftResult.status}`);
+    expect(draftResult.status).toBe(403);
+
+    // Now submit the proposal (from proposer's session).
+    await submitProposalViaAPI(proposerPage, draftProposalId);
+
+    // Reviewer CAN now read it (it's SUBMITTED).
+    const submittedResult = await reviewerPage.evaluate(async ({ proposalId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}`);
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }, { proposalId: draftProposalId });
+    console.log(`[DIAG] Reviewer reads SUBMITTED: status=${submittedResult.status}`);
+    expect(submittedResult.status).toBe(200);
+
+    await proposerCtx.close();
+    await reviewerCtx.close();
+  });
+
+  test("regular member CANNOT read another user's SUBMITTED proposal via HTTP", async ({ browser }) => {
+    test.setTimeout(120000);
+
+    // Create + submit a proposal.
+    const proposerCtx = await browser.newContext();
+    const proposerPage = await proposerCtx.newPage();
+    const propEmail = `${PREFIX}-http-member@str-test.local`;
+    await signupAndVerify(proposerPage, propEmail, "HTTP Proposer");
+    await signin(proposerPage, propEmail, PASSWORD);
+    const proposalId = await createProposalViaAPI(proposerPage, "HTTP Member Access Test");
+    await submitProposalViaAPI(proposerPage, proposalId);
+
+    // Sign in as regular member (seeded, no reviewer role).
+    const memberCtx = await browser.newContext();
+    const memberPage = await memberCtx.newPage();
+    await signin(memberPage, MEMBER_EMAIL, MEMBER_PASSWORD);
+
+    // Member tries to read → 403.
+    const result = await memberPage.evaluate(async ({ proposalId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}`);
+      return { status: res.status };
+    }, { proposalId });
+    console.log(`[DIAG] Member reads SUBMITTED: status=${result.status}`);
+    expect(result.status).toBe(403);
+
+    // Submitter CAN read their own proposal → 200.
+    const ownerResult = await proposerPage.evaluate(async ({ proposalId }) => {
+      const res = await fetch(`/api/proposals/${proposalId}`);
+      return { status: res.status };
+    }, { proposalId });
+    console.log(`[DIAG] Owner reads own SUBMITTED: status=${ownerResult.status}`);
+    expect(ownerResult.status).toBe(200);
+
+    await proposerCtx.close();
+    await memberCtx.close();
+  });
+});
