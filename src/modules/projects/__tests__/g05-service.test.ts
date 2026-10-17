@@ -69,7 +69,7 @@ describe("G05 — Milestone lifecycle", () => {
     run = startTestRun();
     const { projectId, leadId } = await createTestProject(run);
     const m = await createMilestone(projectId, leadId, {
-      title: "M1",
+      title: "Milestone 1",
       description: "First milestone for testing the lifecycle transitions.",
     });
     await startMilestone(m.id, leadId);
@@ -82,19 +82,21 @@ describe("G05 — Milestone lifecycle", () => {
   it("prevents member from creating milestone (only lead/steward)", async () => {
     run = startTestRun();
     const { projectId, memberId } = await createTestProject(run);
+    // Member is a participant (can see project) but lacks manage permission.
+    // Throws ForbiddenError (not NotFound) — only non-participants get NotFound.
     await expect(
       createMilestone(projectId, memberId, {
         title: "Unauthorized",
         description: "Should be rejected because member is not lead/steward.",
       }),
-    ).rejects.toThrow(NotFoundError); // NotFound to avoid role leak
+    ).rejects.toThrow(ForbiddenError);
   });
 
   it("prevents cancel of an already-COMPLETED milestone", async () => {
     run = startTestRun();
     const { projectId, leadId } = await createTestProject(run);
     const m = await createMilestone(projectId, leadId, {
-      title: "M1",
+      title: "Completed milestone",
       description: "Will be completed and then cancel should fail.",
     });
     await startMilestone(m.id, leadId);
