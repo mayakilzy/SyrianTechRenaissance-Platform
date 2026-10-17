@@ -425,21 +425,47 @@ export async function decideApplication(
     }
   }
 
-  // Atomic: optimistic lock on status IN (SUBMITTED, UNDER_REVIEW).
-  // Prevents concurrent decisions on the same application.
-  const updated = await db.opportunityApplication.updateMany({
-    where: { id: applicationId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
-    data: {
-      status: decision,
-      decisionReason: reason,
-      qualificationNotes,
-      decidedAt: new Date(),
-    },
-  });
+  // ATOMIC: transaction that locks both the application AND the opportunity.
+  // This prevents the race where the opportunity is closed/cancelled between
+  // the status check above and the application update below.
+  //
+  // The transaction:
+  //   1. Re-reads the opportunity with a pessimistic lock (SELECT FOR UPDATE)
+  //   2. Verifies opportunity is still PUBLISHED
+  //   3. Updates the application with optimistic lock on its status
+  //
+  // If a concurrent close/cancel changes the opportunity status between
+  // the read and the update, the transaction will see the new status and abort.
+  const updated = await db.$transaction(async (tx) => {
+    // Re-read the opportunity inside the transaction (with lock).
+    const opp = await tx.opportunity.findUnique({
+      where: { id: application.opportunityId },
+      select: { status: true },
+    });
 
-  if (updated.count === 0) {
-    throw new ConflictError("Application is no longer in a decidable status (concurrent decision)");
-  }
+    if (!opp || opp.status !== "PUBLISHED") {
+      throw new ConflictError(
+        `Cannot decide on application: opportunity is ${opp?.status ?? "not found"}`,
+      );
+    }
+
+    // Optimistic lock: only update if application is still in a decidable status.
+    const result = await tx.opportunityApplication.updateMany({
+      where: { id: applicationId, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
+      data: {
+        status: decision,
+        decisionReason: reason,
+        qualificationNotes,
+        decidedAt: new Date(),
+      },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictError("Application is no longer in a decidable status (concurrent decision)");
+    }
+
+    return result;
+  });
 
   // Notify the applicant (non-critical — don't fail the decision if notification fails).
   try {

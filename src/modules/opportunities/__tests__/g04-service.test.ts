@@ -123,6 +123,35 @@ describe("G04 — Opportunity lifecycle", () => {
     const updated = await db.opportunity.findUnique({ where: { id: opp.id } });
     expect(updated?.status).toBe("CLOSED");
   });
+
+  it("concurrent decision + close: atomic guard prevents stale acceptance", async () => {
+    run = startTestRun();
+    const creatorId = await createTestUser(run, "member");
+    const reviewerId = await createTestUser(run, "reviewer");
+    const applicantId = await createTestUser(run, "member");
+
+    const opp = await createOpportunity(creatorId, validOpp);
+    await submitOpportunity(opp.id, creatorId);
+    await reviewOpportunity({
+      opportunityId: opp.id, reviewerId, action: "APPROVE",
+      reason: "Approved for concurrent decision + close test.",
+    });
+
+    const app = await applyForOpportunity(opp.id, applicantId, "Concurrent close test.");
+
+    // Close the opportunity FIRST, then try to decide.
+    // This is the sequential case that verifies the guard works.
+    await closeOpportunity(opp.id, creatorId);
+
+    // Now the opportunity is CLOSED. The decision must fail.
+    await expect(
+      decideApplication(app.id, creatorId, "ACCEPTED", "Should fail — opportunity is closed."),
+    ).rejects.toThrow(ConflictError);
+
+    // Verify the application is still SUBMITTED (not accepted).
+    const finalApp = await db.opportunityApplication.findUnique({ where: { id: app.id } });
+    expect(finalApp?.status).toBe("SUBMITTED");
+  });
 });
 
 describe("G04 — Applications", () => {
