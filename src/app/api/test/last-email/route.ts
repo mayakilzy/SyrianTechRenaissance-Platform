@@ -8,31 +8,25 @@
  * except an isolated test/CI build.
  *
  * Protection layers:
- *   1. Runtime: Returns 404 unless `process.env.STR_TEST_MODE === "1"`.
- *      This env var is set ONLY by the Playwright CI web server command
- *      (see playwright.config.ts). It is never set in production, staging,
- *      or even local dev (unless explicitly opted in).
- *   2. Build: The route is excluded from the production standalone output
- *      trace via `outputFileTracingExcludes` in next.config.ts.
- *   3. CI verification: security-negative.spec.ts asserts no email content
- *      leaks when the route is unreachable.
+ *   1. Runtime: Returns 404 unless STR_TEST_MODE env var is "1".
+ *      This env var is whitelisted in next.config.ts `env` block so it
+ *      reaches the route handler at runtime.
+ *   2. Build: Excluded from production standalone output trace.
+ *   3. CI verification: security-negative.spec.ts.
  *
  * We use STR_TEST_MODE instead of NODE_ENV because Next.js's `next dev`
- * forces NODE_ENV=development, which would override any NODE_ENV=test we
- * set in the CI web server command.
- *
- * See G02-RECOVERY §5 (test route hardening).
+ * forces NODE_ENV=development. The check is done inside the handler
+ * (not at module top-level) to avoid build-time inlining.
  */
 
 import { NextResponse } from "next/server";
 import { getCaptureEmailService } from "@/modules/identity/email-service";
 
-const TEST_MODE_ENABLED = process.env.STR_TEST_MODE === "1";
-
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (!TEST_MODE_ENABLED) {
+  // Runtime check (not build-time inlined).
+  if (process.env.STR_TEST_MODE !== "1") {
     return NextResponse.json(
       { ok: false, error: { code: "STR_NOT_FOUND", message: "Not found" } },
       { status: 404 },

@@ -23,6 +23,7 @@ const nextConfig: NextConfig = {
   // auth-config.ts (which transitively imports argon2).
   env: {
     NEXT_PUBLIC_GOOGLE_ENABLED: googleEnabled ? "true" : "false",
+    STR_TEST_MODE: process.env.STR_TEST_MODE ?? "0",
   },
   // Exclude test-only API routes from the production standalone output trace.
   outputFileTracingExcludes: {
