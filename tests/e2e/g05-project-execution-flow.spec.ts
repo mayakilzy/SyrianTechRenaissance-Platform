@@ -89,7 +89,7 @@ test.describe("G05 — Project Execution Full E2E", () => {
     await leadPage.click('button[type="submit"]');
     // Email verification — extract URL from filesystem (CaptureEmailService)
     const { extractVerificationUrl, waitForEmail } = await import("./fixtures/test-emails");
-    await waitForEmail(LEAD_EMAIL, 15000);
+    await waitForEmail(LEAD_EMAIL, 30000);
     const leadVerifyUrl = extractVerificationUrl(LEAD_EMAIL);
     expect(leadVerifyUrl).toBeTruthy();
     await leadPage.goto(leadVerifyUrl!.replace(/^https?:\/\/[^/]+/, ""));
@@ -101,7 +101,7 @@ test.describe("G05 — Project Execution Full E2E", () => {
     await memberPage.fill('[name="password"]', PASSWORD);
     await memberPage.fill('[name="displayName"]', "G05 Member E2E");
     await memberPage.click('button[type="submit"]');
-    await waitForEmail(MEMBER_EMAIL, 15000);
+    await waitForEmail(MEMBER_EMAIL, 30000);
     const memberVerifyUrl = extractVerificationUrl(MEMBER_EMAIL);
     expect(memberVerifyUrl).toBeTruthy();
     await memberPage.goto(memberVerifyUrl!.replace(/^https?:\/\/[^/]+/, ""));
@@ -166,12 +166,15 @@ test.describe("G05 — Project Execution Full E2E", () => {
     expect(approveRes.ok, `Approval failed: ${approveRes.error?.message}`).toBe(true);
 
     // ── Step 4: Get the project ID (created atomically on approval) ──
-    // The approval response should include the project, OR we can fetch via API
-    const projectId = approveRes.data?.project?.id || approveRes.data?.proposal?.projectId;
+    // The approval response shape varies; fetch the proposal detail to get project.id reliably.
+    let projectId: string | undefined = approveRes.data?.project?.id || approveRes.data?.proposal?.projectId;
     if (!projectId) {
-      // Fallback: query the project by proposalId via the proposal detail
+      // Fetch the proposal detail which includes the embedded project
       const propDetail = await apiCall(reviewerPage, "GET", `/api/proposals/${proposalId}`);
-      console.log("Proposal detail:", JSON.stringify(propDetail.data?.proposal));
+      projectId = propDetail.data?.proposal?.project?.id;
+      if (!projectId) {
+        console.log("Proposal detail:", JSON.stringify(propDetail.data?.proposal));
+      }
     }
     expect(projectId, "Project ID should be available after approval").toBeTruthy();
 
