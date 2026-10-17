@@ -17,6 +17,14 @@ const nextConfig: NextConfig = {
   },
   // Stabilize typed routes for route contract verification (G01 acceptance).
   typedRoutes: true,
+  // Exclude test-only API routes from the production standalone output trace.
+  // The route itself is still compiled (Next.js doesn't support per-route
+  // exclusion cleanly), but the standalone server won't include it in its
+  // file trace, making it harder to accidentally deploy. The runtime guard
+  // in the route handler is the primary defense.
+  outputFileTracingExcludes: {
+    "*": ["./src/app/api/test/**/*"],
+  },
   // Security headers applied globally; middleware layers additional per-request controls.
   async headers() {
     return [
