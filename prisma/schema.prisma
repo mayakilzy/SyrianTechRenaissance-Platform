@@ -43,6 +43,10 @@ model User {
   connections      IntegrationConnection[]
   initiatedJobs    IntegrationJob[]     @relation("JobInitiator")
   consentRecords   ConsentRecord[]
+  emailVerifications EmailVerification[]
+  passwordResets   PasswordReset[]
+  profile          MemberProfile?
+  roleGrants       RoleGrant[]
 
   @@index([email])
 }
@@ -62,6 +66,7 @@ model AuthIdentity {
   provider     String   // "password" | "google" | future OIDC providers
   providerSub  String   // immutable provider id (e.g. Google `sub`)
   emailAtLink  String   // email at the time of linking (audit only)
+  passwordHash String?  // only set when provider = "password"
   linkedAt     DateTime @default(now())
   unlinkedAt   DateTime?
 
@@ -78,6 +83,21 @@ model EmailVerification {
   expiresAt DateTime
   consumedAt DateTime?
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
@@ -261,4 +281,122 @@ model OutboxEvent {
 
   @@index([dispatchedAt])
   @@index([aggregate, aggregateId])
+}
+
+// ============================================================
+// G02 — Identity, Profiles and Roles
+// ============================================================
+
+// ------------------------------------------------------------
+// Roles (module: governance) — RBAC foundation
+// ------------------------------------------------------------
+
+model RoleGrant {
+  // Global roles only in G02 (member, admin). Project-scoped roles
+  // (project_lead, steward, team_member) arrive in G03 with a scope field.
+  id        String   @id @default(cuid())
+  userId    String
+  role      String   // "member" | "admin"
+  scope     String   @default("global") // future: "project:xxx"
+  grantedBy String?
+  grantedAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role, scope])
+  @@index([userId])
+}
+
+// ------------------------------------------------------------
+// Professional Profiles (module: profiles)
+// ------------------------------------------------------------
+
+model MemberProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  displayName     String
+  headline        String?  // short professional title
+  bio             String?  @db.Text
+  avatarUrl       String?
+  contactEmail    String?  // separate from auth email; visible per settings
+  location        String?
+  websiteUrl      String?
+  availability    ProfileAvailability @default(CLOSED)
+  completenessPct Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills       MemberSkill[]
+  portfolio    PortfolioItem[]
+  visibility   ProfileVisibility?
+
+  @@index([availability])
+}
+
+enum ProfileAvailability {
+  OPEN      // actively seeking opportunities
+  LIMITED   // open to select opportunities
+  CLOSED    // not currently available
+}
+
+model Skill {
+  id    String @id @default(cuid())
+  name  String @unique
+  // Normalized lowercase for dedup; display uses original casing.
+  normalizedName String @unique
+
+  memberSkills MemberSkill[]
+
+  @@index([normalizedName])
+}
+
+model MemberSkill {
+  id        String @id @default(cuid())
+  profileId String
+  skillId   String
+  level     SkillLevel @default(INTERMEDIATE)
+
+  profile MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skill   Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, skillId])
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model PortfolioItem {
+  id          String   @id @default(cuid())
+  profileId   String
+  title       String
+  description String?  @db.Text
+  url         String?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+model ProfileVisibility {
+  // Controls what is visible on the public profile view. The auth email
+  // is NEVER shown publicly; only contactEmail (if set + showContact=true).
+  id              String   @id @default(cuid())
+  profileId       String   @unique
+  showContact     Boolean  @default(false)
+  showLocation    Boolean  @default(false)
+  showSkills      Boolean  @default(true)
+  showPortfolio   Boolean  @default(true)
+  showAvailability Boolean @default(true)
+
+  profile MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }

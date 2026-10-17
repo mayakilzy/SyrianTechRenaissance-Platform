@@ -100,11 +100,12 @@ export function loadEnv(): Env {
 }
 
 /** Convenience accessor; lazily loads on first use. */
-export const env: Env = new Proxy({} as Env, {
+export const env = new Proxy({} as Env, {
   get(_t, prop: string) {
-    return (loadEnv() as Record<string, unknown>)[prop];
+    const loaded = loadEnv() as Record<string, unknown>;
+    return loaded[prop];
   },
-});
+}) as Env;
 
 /** True when running in a local dev / sandbox environment. */
 export const isDev = process.env.NODE_ENV !== "production";
