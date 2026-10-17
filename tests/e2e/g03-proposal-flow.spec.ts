@@ -326,7 +326,12 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     console.log(`[DIAG] Project page final URL: ${proposerPage.url()}`);
     const projectPageText = await proposerPage.locator("body").textContent();
     console.log(`[DIAG] Project page text preview: ${projectPageText?.substring(0, 200)}`);
-    await expect(proposerPage.locator("text=E2E Mentorship Program")).toBeVisible({ timeout: 10000 });
+    // Wait for the h1 to be visible (the project title).
+    const h1 = proposerPage.locator("h1");
+    await expect(h1).toBeVisible({ timeout: 15000 });
+    const h1Text = await h1.textContent();
+    console.log(`[DIAG] h1 text: ${h1Text}`);
+    expect(h1Text).toContain("E2E Mentorship Program");
 
     await proposerCtx.close();
     await inviteeCtx.close();
