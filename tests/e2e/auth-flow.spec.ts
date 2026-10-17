@@ -98,7 +98,7 @@ test.describe("STR Auth — signup → verify → login flow", () => {
 
     // Should NOT reveal that the email is already registered
     await expect(page.locator("text=already exists")).not.toBeVisible();
-    await expect(page.locator("text=مسجل")).not.toBeVisible();
+    await expect(page.locator("text=موجود بالفعل")).not.toBeVisible();
   });
 
   test("password reset flow", async ({ page, request }) => {
