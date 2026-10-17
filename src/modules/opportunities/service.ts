@@ -359,15 +359,28 @@ export async function getApplicationsForOpportunity(opportunityId: string, reque
 }
 
 export async function getMyApplications(userId: string) {
-  return db.opportunityApplication.findMany({
+  // SECURITY: explicitly select only fields the applicant should see.
+  // qualificationNotes is PRIVATE — only visible to the opportunity creator and reviewers.
+  const apps = await db.opportunityApplication.findMany({
     where: { applicantId: userId },
-    include: {
+    select: {
+      id: true,
+      opportunityId: true,
+      status: true,
+      coverNote: true,
+      decisionReason: true,
+      createdAt: true,
+      updatedAt: true,
+      decidedAt: true,
+      withdrawnAt: true,
+      // qualificationNotes is intentionally NOT selected here.
       opportunity: {
         select: { id: true, title: true, status: true },
       },
     },
     orderBy: { createdAt: "desc" },
   });
+  return apps;
 }
 
 export async function decideApplication(
