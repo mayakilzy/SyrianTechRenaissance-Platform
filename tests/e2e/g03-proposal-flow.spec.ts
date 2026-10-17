@@ -242,6 +242,11 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     expect(reviseResult.status).toBe(200);
 
     // ── Step 4: Proposer revises and resubmits ──
+    // Check proposal status before revise
+    const beforeRevise = await getProposalViaAPI(proposerPage, proposalId);
+    const beforeReviseData = (beforeRevise.data as { data: { proposal: { status: string } } }).data.proposal;
+    console.log(`[DIAG] Proposal status before revise: ${beforeReviseData.status}`);
+
     const reviseResult2 = await proposerPage.evaluate(async ({ proposalId, charter }) => {
       const res = await fetch(`/api/proposals/${proposalId}/revise`, {
         method: "POST",
