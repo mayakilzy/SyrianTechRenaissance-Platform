@@ -49,7 +49,7 @@ export async function createTestUser(
           : role === "reviewer"
             ? { create: [{ role: "member", scope: "global" }, { role: "reviewer", scope: "global" }] }
             : role === "steward"
-              ? { create: [{ role: "member", scope: "global" }, { role: "reviewer", scope: "global" }] }
+              ? { create: [{ role: "member", scope: "global" }, { role: "reviewer", scope: "global" }, { role: "steward", scope: "global" }] }
               : role === "lead"
                 ? { create: [{ role: "member", scope: "global" }] }
                 : role === "admin"
