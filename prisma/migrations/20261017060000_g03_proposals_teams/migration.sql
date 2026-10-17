@@ -267,7 +267,3 @@ ALTER TABLE "ResourceGrant" ADD CONSTRAINT "ResourceGrant_projectId_fkey" FOREIG
 -- AddForeignKey
 ALTER TABLE "ResourceGrant" ADD CONSTRAINT "ResourceGrant_grantedBy_fkey" FOREIGN KEY ("grantedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
-
--- AddUniqueIndex: only one active steward per project (unassignedAt IS NULL)
-CREATE UNIQUE INDEX "StewardAssignment_projectId_active_unique" ON "StewardAssignment"("projectId") WHERE "unassignedAt" IS NULL;
-

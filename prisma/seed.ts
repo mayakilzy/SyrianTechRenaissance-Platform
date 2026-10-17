@@ -11,6 +11,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/modules/identity/password";
 
 const prisma = new PrismaClient();
 
