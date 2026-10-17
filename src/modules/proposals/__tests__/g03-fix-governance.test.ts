@@ -52,17 +52,20 @@ const validCharter = {
 };
 
 beforeEach(async () => {
-  // Clean up G03 entities only. Users are created fresh each test with
-  // unique emails (Date.now + random), so they don't conflict.
-  await db.resourceGrant.deleteMany({});
-  await db.teamInvitation.deleteMany({});
-  await db.teamMembership.deleteMany({});
-  await db.stewardAssignment.deleteMany({});
-  await db.team.deleteMany({});
-  await db.reviewDecision.deleteMany({});
-  await db.project.deleteMany({});
-  await db.charterRevision.deleteMany({});
-  await db.projectProposal.deleteMany({});
+  // Clean up G03 entities in strict FK order. Wrap in try/catch to
+  // tolerate residual data from parallel test runs.
+  const cleanup = async () => {
+    await db.resourceGrant.deleteMany({});
+    await db.teamInvitation.deleteMany({});
+    await db.teamMembership.deleteMany({});
+    await db.stewardAssignment.deleteMany({});
+    await db.reviewDecision.deleteMany({});
+    await db.team.deleteMany({});
+    await db.project.deleteMany({});
+    await db.charterRevision.deleteMany({});
+    await db.projectProposal.deleteMany({});
+  };
+  try { await cleanup(); } catch (e) { /* retry once */ try { await cleanup(); } catch {} }
 
   // Create users with appropriate roles.
   const submitter = await db.user.create({
