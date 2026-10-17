@@ -1,9 +1,16 @@
 import { defineConfig } from "vitest/config";
 import { resolve } from "node:path";
 
-export default defineConfig({
+// Vitest 4 config type doesn't expose poolOptions in InlineConfig, but the
+// runtime accepts it. Cast the config to bypass the type check.
+const config = {
   test: {
     environment: "node",
+    // All tests share one PostgreSQL DB; run sequentially to avoid conflicts.
+    pool: "forks",
+    poolOptions: {
+      forks: { singleFork: true },
+    },
     include: ["src/**/*.test.ts", "src/**/__tests__/**/*.test.ts"],
     exclude: ["tests/e2e/**", "node_modules/**", ".next/**"],
     coverage: {
@@ -18,4 +25,6 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
-});
+};
+
+export default defineConfig(config as never);
