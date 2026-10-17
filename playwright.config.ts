@@ -22,12 +22,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  // The CI job-level env (in .github/workflows/ci.yml) sets STR_TEST_MODE=1,
-  // so the web server inherits it. We don't prefix the command here to avoid
-  // shell-quoting issues. The dev server reads STR_TEST_MODE from process.env.
+  // Pass STR_TEST_MODE explicitly in the webServer command to guarantee
+  // the dev server sees it. The CI job env should be inherited, but
+  // explicit is better than implicit.
   webServer: process.env.CI
     ? {
-        command: "bun run dev",
+        command: `STR_TEST_MODE=${process.env.STR_TEST_MODE ?? "0"} bun run dev`,
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 60_000,
