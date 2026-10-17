@@ -58,10 +58,13 @@ async function signin(page: import("@playwright/test").Page, email: string, pass
 }
 
 async function getUserId(page: import("@playwright/test").Page): Promise<string> {
-  await page.goto("/dashboard");
-  const text = await page.locator("body").textContent();
-  const match = text?.match(/ID[:\s]+([a-zA-Z0-9]+)/);
-  return match?.[1] ?? "";
+  // Use the NextAuth session endpoint to get the user ID reliably.
+  const result = await page.evaluate(async () => {
+    const res = await fetch("/api/auth/session");
+    const data = await res.json();
+    return data?.user?.id ?? "";
+  });
+  return result;
 }
 
 /**
