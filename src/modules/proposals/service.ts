@@ -482,6 +482,102 @@ async function approveProposalAtomically(
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Scope change after approval (G03-FINAL §3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Request a scope change for an APPROVED project.
+ * Creates a new CharterRevision and sets the proposal status to NEEDS_REVISION.
+ * The approved charter remains immutable; the new revision must be re-approved
+ * before it takes effect.
+ *
+ * Only the project lead or the steward can request a scope change.
+ */
+export async function requestScopeChange(
+  proposalId: string,
+  actorId: string,
+  charter: CharterRevisionInput,
+  reason: string,
+): Promise<void> {
+  const valid = charterRevisionSchema.safeParse(charter);
+  if (!valid.success) {
+    const fields: Record<string, string[]> = {};
+    for (const issue of valid.error.issues) {
+      const key = issue.path.join(".") || "_";
+      (fields[key] ??= []).push(issue.message);
+    }
+    throw new ValidationError("Invalid charter data", fields);
+  }
+  if (reason.trim().length < 10) {
+    throw new ValidationError("Scope change reason must be at least 10 characters");
+  }
+
+  const proposal = await db.projectProposal.findUnique({
+    where: { id: proposalId },
+    include: {
+      project: true,
+      revisions: { orderBy: { version: "desc" }, take: 1 },
+    },
+  });
+  if (!proposal) throw new NotFoundError("Proposal not found");
+  if (proposal.status !== "APPROVED") {
+    throw new ConflictError("Scope changes can only be requested for approved projects");
+  }
+  if (!proposal.project) {
+    throw new UnprocessableEntityError("No project found for this proposal");
+  }
+
+  // Only the lead or steward can request a scope change.
+  const isLead = proposal.project.leadId === actorId;
+  const isSteward = proposal.project.stewardId === actorId;
+  const isAdmin = await db.roleGrant.findFirst({
+    where: { userId: actorId, role: "admin", scope: "global", revokedAt: null },
+  });
+  if (!isLead && !isSteward && !isAdmin) {
+    throw new ForbiddenError("Only the lead, steward, or admin can request a scope change");
+  }
+
+  const lastVersion = proposal.revisions[0]?.version ?? 0;
+
+  await db.$transaction(async (tx) => {
+    const revision = await tx.charterRevision.create({
+      data: {
+        proposalId,
+        version: lastVersion + 1,
+        createdBy: actorId,
+        isSubmitted: true,
+        ...valid.data,
+        requiredSkills: valid.data.requiredSkills,
+      },
+    });
+
+    // Set the proposal to NEEDS_REVISION — the scope change must be re-approved.
+    await tx.projectProposal.update({
+      where: { id: proposalId },
+      data: {
+        currentRevisionId: revision.id,
+        status: "NEEDS_REVISION",
+      },
+    });
+
+    // Record the scope change request as a review decision (for audit).
+    await tx.reviewDecision.create({
+      data: {
+        proposalId,
+        reviewerId: actorId,
+        revisionId: revision.id,
+        action: "REQUEST_REVISION",
+        reason: `Scope change requested: ${reason}`,
+        isSelfReview: false,
+      },
+    });
+  });
+
+  logger.info("proposals.scope_change_requested", { proposalId, actorId, reason });
+}
+
 // ---------------------------------------------------------------------------
 // Get proposals
 // ---------------------------------------------------------------------------

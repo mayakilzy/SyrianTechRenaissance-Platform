@@ -218,14 +218,17 @@ export async function changeSteward(input: ChangeStewardInput): Promise<void> {
   }
 
   await db.$transaction(async (tx) => {
-    // Update the existing steward assignment (projectId is unique).
-    await tx.stewardAssignment.update({
-      where: { projectId: input.projectId },
+    // Unassign the old steward (preserve audit trail — don't delete).
+    await tx.stewardAssignment.updateMany({
+      where: { projectId: input.projectId, unassignedAt: null },
+      data: { unassignedAt: new Date() },
+    });
+    // Create new steward assignment (audit trail preserved).
+    await tx.stewardAssignment.create({
       data: {
+        projectId: input.projectId,
         stewardId: input.newStewardId,
         assignedBy: input.actorId,
-        assignedAt: new Date(),
-        unassignedAt: null,
       },
     });
     // Update the project's stewardId.
