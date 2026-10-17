@@ -316,8 +316,11 @@ export async function reviewProposal(input: ReviewInput) {
     await approveProposalAtomically(proposal, input);
   } else if (input.action === "REJECT") {
     // Reject: record decision + update status in one transaction.
-    await db.$transaction([
-      db.reviewDecision.create({
+    if (!proposal.currentRevisionId) {
+      throw new UnprocessableEntityError("Proposal has no current revision");
+    }
+    await db.$transaction(async (tx) => {
+      await tx.reviewDecision.create({
         data: {
           proposalId: input.proposalId,
           reviewerId: input.reviewerId,
@@ -326,16 +329,19 @@ export async function reviewProposal(input: ReviewInput) {
           reason: input.reason,
           isSelfReview: false,
         },
-      }),
-      db.projectProposal.update({
+      });
+      await tx.projectProposal.update({
         where: { id: input.proposalId },
         data: { status: "REJECTED", rejectedAt: new Date() },
-      }),
-    ]);
+      });
+    });
   } else if (input.action === "REQUEST_REVISION") {
     // Request revision: record decision + update status.
-    await db.$transaction([
-      db.reviewDecision.create({
+    if (!proposal.currentRevisionId) {
+      throw new UnprocessableEntityError("Proposal has no current revision");
+    }
+    await db.$transaction(async (tx) => {
+      await tx.reviewDecision.create({
         data: {
           proposalId: input.proposalId,
           reviewerId: input.reviewerId,
@@ -344,12 +350,12 @@ export async function reviewProposal(input: ReviewInput) {
           reason: input.reason,
           isSelfReview: false,
         },
-      }),
-      db.projectProposal.update({
+      });
+      await tx.projectProposal.update({
         where: { id: input.proposalId },
         data: { status: "NEEDS_REVISION" },
-      }),
-    ]);
+      });
+    });
   }
 
   logger.info("proposals.reviewed", {
