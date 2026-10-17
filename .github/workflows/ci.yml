@@ -140,6 +140,9 @@ jobs:
       - name: Seed synthetic fixtures
         run: bun run db:seed
 
+      - name: Seed test-only institutional accounts
+        run: bun run db:seed-test
+
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
