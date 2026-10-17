@@ -1,18 +1,22 @@
 /**
  * STR Identity — Email Service
  * ----------------------------
- * Abstraction over email delivery. Three implementations:
- *   - LogEmailService    (dev): writes email content to the structured log
- *   - CaptureEmailService (test): stores emails in memory for test assertions
- *   - SmtpEmailService   (prod, future): real SMTP sending via nodemailer
+ * Abstraction over email delivery. Implementations:
+ *   - LogEmailService    (dev/prod): writes redacted metadata to structured log
+ *   - CaptureEmailService (test-only): writes full emails to a JSON file on disk
+ *     so Playwright tests can read them WITHOUT any HTTP route in the app
  *
- * G02 does NOT claim external email delivery. The LogEmailService is the
- * default in development; tests use CaptureEmailService. Production email
- * is deferred until a real SMTP provider is configured (G10 deployment).
+ * G02 does NOT claim external email delivery. LogEmailService is the default
+ * in dev/prod; tests use CaptureEmailService. Production email is deferred
+ * until SMTP is configured (G10).
  *
- * See G02 acceptance: "do not claim email delivery if no real service is
- * available."
+ * SECURITY: LogEmailService MUST NOT log sensitive content (tokens, URLs,
+ * passwords). See G02-SECURITY-CLOSE §4.
  */
+
+import { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { logger } from "@/lib/logger";
 
 export interface EmailMessage {
   to: string;
@@ -21,7 +25,7 @@ export interface EmailMessage {
   htmlBody?: string;
   metadata?: {
     type: "verification" | "password_reset" | "welcome";
-    tokenPreview?: string; // first 8 chars, for log correlation only
+    tokenPreview?: string;
   };
 }
 
@@ -29,71 +33,101 @@ export interface EmailService {
   send(message: EmailMessage): Promise<void>;
 }
 
+// Patterns to redact from logs: verification/reset URLs, token values, passwords.
+const TOKEN_URL_RE = /https?:\/\/[^\s]*?(?:token=|reset-password\/)[^\s&]*/gi;
+const TOKEN_VALUE_RE = /\btoken=[^\s&]+/gi;
+const PASSWORD_RE = /\bpassword[=:]\s*[^\s]+/gi;
+
+function redactForLog(text: string): string {
+  return text
+    .replace(TOKEN_URL_RE, "[REDACTED_URL]")
+    .replace(TOKEN_VALUE_RE, "token=[REDACTED]")
+    .replace(PASSWORD_RE, "password=[REDACTED]");
+}
+
 /**
- * Dev implementation: logs the email as a structured JSON line so the
- * developer can find the verification/reset URL in the server output.
+ * Dev/prod implementation: logs redacted metadata ONLY.
+ * NEVER logs full email body, tokens, or verification URLs.
  */
 export class LogEmailService implements EmailService {
   async send(message: EmailMessage): Promise<void> {
-    // Dynamic import to avoid circular dependency at module load time.
-    const { logger } = await import("@/lib/logger");
     logger.info("email.sent", {
       to: message.to,
-      subject: message.subject,
+      subject: redactForLog(message.subject),
       type: message.metadata?.type,
-      // Log the text body so the verification link is visible in dev.
-      // In production, this implementation is never used.
-      preview: message.textBody.substring(0, 500),
+      // DO NOT log: textBody, htmlBody, tokenPreview, or any URL.
+      bodyLength: message.textBody.length,
+      hasTokenUrl: TOKEN_URL_RE.test(message.textBody),
     });
   }
 }
 
 /**
- * Test implementation: stores all sent emails in an array so tests can
- * extract tokens and verify delivery. Cleared between test runs.
+ * Test-only implementation: writes full emails to a JSON file on disk.
+ * Playwright tests read this file DIRECTLY — NO HTTP route is needed.
+ * This is the G02-SECURITY-CLOSE isolation design: tests read from the
+ * filesystem, not from the application.
+ *
+ * SECURITY: Only instantiated when STR_TEST_MODE=1. The app's production
+ * code never imports this class — it's loaded via getEmailService() only
+ * when the env var is set.
  */
 export class CaptureEmailService implements EmailService {
-  readonly sent: EmailMessage[] = [];
+  private readonly filePath: string;
 
-  async send(message: EmailMessage): Promise<void> {
-    this.sent.push(message);
+  constructor(filePath?: string) {
+    this.filePath =
+      filePath ??
+      join(process.env.STR_TEST_EMAIL_FILE ?? "/tmp", "str-test-emails.json");
   }
 
+  async send(message: EmailMessage): Promise<void> {
+    const emails = this.readAll();
+    const filtered = emails.filter((e) => e.to !== message.to);
+    filtered.push(message);
+    this.writeAll(filtered);
+  }
+
+  private readAll(): EmailMessage[] {
+    if (!existsSync(this.filePath)) return [];
+    try {
+      const raw = readFileSync(this.filePath, "utf-8");
+      return JSON.parse(raw) as EmailMessage[];
+    } catch {
+      return [];
+    }
+  }
+
+  private writeAll(emails: EmailMessage[]): void {
+    const dir = this.filePath.substring(0, this.filePath.lastIndexOf("/"));
+    if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(this.filePath, JSON.stringify(emails, null, 2), "utf-8");
+  }
+
+  /** Clear the email file. Called by Playwright globalSetup before each run. */
   clear(): void {
-    this.sent.length = 0;
+    if (existsSync(this.filePath)) {
+      unlinkSync(this.filePath);
+    }
   }
 
   /** Find the last email sent to a given address. */
   lastTo(address: string): EmailMessage | undefined {
-    for (let i = this.sent.length - 1; i >= 0; i--) {
-      const email = this.sent[i];
+    const emails = this.readAll();
+    for (let i = emails.length - 1; i >= 0; i--) {
+      const email = emails[i];
       if (email && email.to === address) return email;
     }
     return undefined;
-  }
-
-  /** Extract a verification/reset URL from the last email to a given address. */
-  extractTokenUrl(address: string): string | undefined {
-    const email = this.lastTo(address);
-    if (!email) return undefined;
-    const match = email.textBody.match(/https?:\/\/[^\s]+token=[^\s&]+/);
-    return match?.[0];
-  }
-
-  /** Extract any URL from the last email to a given address (for reset links). */
-  extractUrl(address: string): string | undefined {
-    const email = this.lastTo(address);
-    if (!email) return undefined;
-    const match = email.textBody.match(/https?:\/\/[^\s]+/);
-    return match?.[0];
   }
 }
 
 /**
  * Factory: returns the right email service for the environment.
- * - test: CaptureEmailService (singleton, accessible from tests)
- * - development: LogEmailService
- * - production: would be SmtpEmailService (not yet implemented — G10)
+ * - STR_TEST_MODE=1: CaptureEmailService (disk-based, for Playwright)
+ * - otherwise: LogEmailService (redacted logging only)
+ *
+ * Production never sets STR_TEST_MODE, so it always gets LogEmailService.
  */
 let captureService: CaptureEmailService | null = null;
 
@@ -102,15 +136,16 @@ export function getEmailService(): EmailService {
     if (!captureService) captureService = new CaptureEmailService();
     return captureService;
   }
-  // dev and production both use LogEmailService until SMTP is wired in G10.
-  // Production deployment is blocked until SmtpEmailService is implemented.
   return new LogEmailService();
 }
 
-/** Test-only accessor for the CaptureEmailService singleton. */
+/**
+ * Test-only accessor. Throws if called outside test mode — production
+ * code can never access captured emails.
+ */
 export function getCaptureEmailService(): CaptureEmailService {
   if (process.env.STR_TEST_MODE !== "1") {
-    throw new Error("CaptureEmailService is only available in test environment");
+    throw new Error("CaptureEmailService is only available in test mode (STR_TEST_MODE=1)");
   }
   if (!captureService) captureService = new CaptureEmailService();
   return captureService;

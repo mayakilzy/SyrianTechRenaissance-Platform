@@ -19,16 +19,10 @@ const nextConfig: NextConfig = {
   },
   typedRoutes: true,
   // Expose the Google-enabled flag to the client bundle at build time.
-  // This lets the signin page show/hide the Google button WITHOUT importing
-  // auth-config.ts (which transitively imports argon2).
   env: {
     NEXT_PUBLIC_GOOGLE_ENABLED: googleEnabled ? "true" : "false",
-    STR_TEST_MODE: process.env.STR_TEST_MODE ?? "0",
   },
-  // Exclude test-only API routes from the production standalone output trace.
-  outputFileTracingExcludes: {
-    "*": ["./src/app/api/test/**/*"],
-  },
+  // Security headers applied globally; proxy layers additional per-request controls.
   async headers() {
     return [
       {

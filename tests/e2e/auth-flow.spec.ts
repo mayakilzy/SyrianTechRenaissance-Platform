@@ -1,4 +1,9 @@
 import { test, expect } from "@playwright/test";
+import {
+  extractVerificationUrl,
+  extractResetUrl,
+  waitForEmail,
+} from "./fixtures/test-emails";
 
 /**
  * STR G02 — Authentication E2E Tests
@@ -9,9 +14,9 @@ import { test, expect } from "@playwright/test";
  *   3. Negative: unverified account cannot login
  *   4. Account enumeration defense: signup with existing email returns same message
  *
- * Requires a running PostgreSQL database (CI provides this via service container).
- * The test uses /api/test/last-email to extract the verification token — this
- * endpoint is ONLY available when NODE_ENV=test (guarded by the route itself).
+ * Email tokens are extracted from a JSON file on disk written by
+ * CaptureEmailService — NOT from an HTTP route. This is the G02-SECURITY-CLOSE
+ * isolation design: the application has NO route that can serve email content.
  *
  * Google OIDC is NOT tested here because external Google credentials are not
  * available. The Google provider code is implemented and will be tested when
@@ -22,7 +27,7 @@ const TEST_EMAIL = `e2e-${Date.now()}@str-test.local`;
 const TEST_PASSWORD = "TestPassword123!";
 
 test.describe("STR Auth — signup → verify → login flow", () => {
-  test("complete email/password flow", async ({ page, request }) => {
+  test("complete email/password flow", async ({ page }) => {
     // ── Step 1: Signup ──
     await page.goto("/auth/signup");
     await page.fill('[name="email"]', TEST_EMAIL);
@@ -35,19 +40,14 @@ test.describe("STR Auth — signup → verify → login flow", () => {
       timeout: 10_000,
     });
 
-    // ── Step 2: Extract verification token from captured email ──
-    const emailRes = await request.get(
-      `/api/test/last-email?to=${encodeURIComponent(TEST_EMAIL)}`,
+    // ── Step 2: Extract verification URL from filesystem (NOT HTTP) ──
+    const verifyUrl = await waitForEmail(TEST_EMAIL, 10_000).then(() =>
+      extractVerificationUrl(TEST_EMAIL),
     );
-    expect(emailRes.status()).toBe(200);
-    const emailBody = await emailRes.json();
-    expect(emailBody.ok).toBe(true);
-    expect(emailBody.data.tokenUrl).toBeTruthy();
+    expect(verifyUrl).toBeTruthy();
 
     // ── Step 3: Visit verification URL ──
-    const tokenUrl = emailBody.data.tokenUrl as string;
-    // Convert to relative path for the test
-    const verifyPath = tokenUrl.replace(/^https?:\/\/[^/]+/, "");
+    const verifyPath = verifyUrl!.replace(/^https?:\/\/[^/]+/, "");
     await page.goto(verifyPath);
 
     // Should show success
@@ -69,7 +69,6 @@ test.describe("STR Auth — signup → verify → login flow", () => {
   });
 
   test("wrong password is rejected", async ({ page }) => {
-    // First ensure the account exists from the previous test
     await page.goto("/auth/signin");
     await page.fill('[name="email"]', TEST_EMAIL);
     await page.fill('[name="password"]', "WrongPassword123!");
@@ -101,7 +100,7 @@ test.describe("STR Auth — signup → verify → login flow", () => {
     await expect(page.locator("text=موجود بالفعل")).not.toBeVisible();
   });
 
-  test("password reset flow", async ({ page, request }) => {
+  test("password reset flow", async ({ page }) => {
     // ── Request reset ──
     await page.goto("/auth/reset-password");
     await page.fill('[name="email"]', TEST_EMAIL);
@@ -112,18 +111,14 @@ test.describe("STR Auth — signup → verify → login flow", () => {
       page.locator("text=password reset link").or(page.locator('text=رابط إعادة تعيين')),
     ).toBeVisible({ timeout: 10_000 });
 
-    // ── Extract reset token ──
-    const emailRes = await request.get(
-      `/api/test/last-email?to=${encodeURIComponent(TEST_EMAIL)}`,
+    // ── Extract reset URL from filesystem (NOT HTTP) ──
+    const resetUrl = await waitForEmail(TEST_EMAIL, 10_000).then(() =>
+      extractResetUrl(TEST_EMAIL),
     );
-    expect(emailRes.status()).toBe(200);
-    const emailBody = await emailRes.json();
-    // The reset URL contains a path segment, not ?token=
-    const resetUrl = emailBody.data.textBody.match(/https?:\/\/[^\s]+\/auth\/reset-password\/[^\s]+/);
     expect(resetUrl).toBeTruthy();
 
     // ── Visit reset URL and set new password ──
-    const resetPath = resetUrl![0].replace(/^https?:\/\/[^/]+/, "");
+    const resetPath = resetUrl!.replace(/^https?:\/\/[^/]+/, "");
     await page.goto(resetPath);
     await page.fill('[name="newPassword"]', "NewPassword123!");
     await page.fill('[name="confirm"]', "NewPassword123!");
@@ -131,7 +126,7 @@ test.describe("STR Auth — signup → verify → login flow", () => {
 
     // Should show success
     await expect(
-      page.locator("text=reset successfully").or(page.locator('text=بنجاح')),
+      page.locator("text=reset successfully").or(page.locator("text=بنجاح")),
     ).toBeVisible({ timeout: 10_000 });
   });
 });
@@ -140,11 +135,9 @@ test.describe("STR Auth — STR-GOV-TEAM-01 enforcement", () => {
   test("team creation is denied even for authenticated users", async ({
     page,
   }) => {
-    // This is enforced in the authorization service, not the UI.
-    // The UI doesn't even have a "create team" button. The test verifies
-    // that the authorization logic blocks this via the unit tests in
-    // authorize.test.ts. Here we just verify the signup page doesn't
-    // promise team creation.
+    // The UI doesn't have a "create team" button. The authorization logic
+    // blocks this via unit tests in authorize.test.ts. Here we verify the
+    // signup page doesn't promise team creation.
     await page.goto("/auth/signup");
     await expect(page.locator("text=create team").or(page.locator("text=إنشاء فريق"))).not.toBeVisible();
   });

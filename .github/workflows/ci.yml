@@ -112,7 +112,12 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://str:str_password@localhost:5432/str_platform?schema=public
+      # STR_TEST_MODE enables CaptureEmailService (writes emails to disk).
+      # STR_TEST_EMAIL_FILE sets the disk path that both the app AND the
+      # Playwright fixture read from. There is NO HTTP route for this —
+      # tests read the file directly from the filesystem.
       STR_TEST_MODE: "1"
+      STR_TEST_EMAIL_FILE: /tmp/str-test-emails.json
       AUTH_SECRET: ci-placeholder-secret-at-least-16-chars
       LOG_LEVEL: warn
       LOG_FORMAT: json
@@ -138,7 +143,7 @@ jobs:
       - name: Run E2E tests
         run: bun run test:e2e
 
-      - name: Upload screenshots (G01 acceptance evidence)
+      - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
