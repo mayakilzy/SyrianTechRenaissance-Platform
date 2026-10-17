@@ -10,13 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Mail, Lock } from "lucide-react";
-import { isGoogleProviderConfigured } from "@/modules/identity/auth-config";
+import { isGoogleProviderConfiguredClient } from "@/modules/identity/client/config";
 
 export default function SigninPage() {
   const t = useTranslations("auth");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const googleConfigured = isGoogleProviderConfigured();
+  const googleConfigured = isGoogleProviderConfiguredClient();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

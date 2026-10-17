@@ -3,6 +3,10 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
+// Build-time flag: expose Google provider status to client bundle without
+// pulling server-only modules (argon2, prisma) into the client.
+const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
@@ -11,21 +15,19 @@ const nextConfig: NextConfig = {
   // that Turbopack can't bundle for the server runtime.
   serverExternalPackages: ["@node-rs/argon2"],
   typescript: {
-    // Type safety is enforced separately via `tsc --noEmit` in CI;
-    // do not silently ignore build errors.
     ignoreBuildErrors: false,
   },
-  // Stabilize typed routes for route contract verification (G01 acceptance).
   typedRoutes: true,
+  // Expose the Google-enabled flag to the client bundle at build time.
+  // This lets the signin page show/hide the Google button WITHOUT importing
+  // auth-config.ts (which transitively imports argon2).
+  env: {
+    NEXT_PUBLIC_GOOGLE_ENABLED: googleEnabled ? "true" : "false",
+  },
   // Exclude test-only API routes from the production standalone output trace.
-  // The route itself is still compiled (Next.js doesn't support per-route
-  // exclusion cleanly), but the standalone server won't include it in its
-  // file trace, making it harder to accidentally deploy. The runtime guard
-  // in the route handler is the primary defense.
   outputFileTracingExcludes: {
     "*": ["./src/app/api/test/**/*"],
   },
-  // Security headers applied globally; middleware layers additional per-request controls.
   async headers() {
     return [
       {
