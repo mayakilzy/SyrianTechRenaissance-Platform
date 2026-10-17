@@ -320,7 +320,8 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
 
     // ── Step 10: Verify project page ──
     console.log(`[DIAG] Project page URL: /projects/${projectId}`);
-    const projectResponse = await proposerPage.goto(`/projects/${projectId}`);
+    const projectResponse = await proposerPage.goto(`/en/projects/${projectId}`);
+    await proposerPage.waitForLoadState("networkidle");
     console.log(`[DIAG] Project page HTTP status: ${projectResponse?.status()}`);
     console.log(`[DIAG] Project page final URL: ${proposerPage.url()}`);
     const projectPageText = await proposerPage.locator("body").textContent();
@@ -413,7 +414,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
       const res = await fetch(`/api/proposals/${proposalId}/scope-change`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...charter, reason }),
+        body: JSON.stringify({ charter, reason }),
       });
       return { status: res.status, body: await res.json().catch(() => null) };
     }, {
@@ -424,7 +425,8 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
       },
       reason: "Need to expand scope to include PostgreSQL training based on demand.",
     });
-    expect(scopeResult.status).toBe(200);
+    console.log(`[DIAG] Scope-change result: status=${scopeResult.status}, body=${JSON.stringify(scopeResult.body)}`);
+    expect(scopeResult.status, `Scope-change failed: ${JSON.stringify(scopeResult.body)}`).toBe(200);
 
     // Verify: proposal is now NEEDS_REVISION.
     const afterScope = await getProposalViaAPI(proposerPage, proposalId);
