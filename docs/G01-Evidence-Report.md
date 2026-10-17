@@ -4,10 +4,10 @@
 **Mission Name:** Foundation and Architecture Fitness
 **Status:** ✅ DONE — all acceptance criteria validated (sandbox + CI)
 **Date:** 2026-10-17 (G01), 2026-10-17 (G01-FIX)
-**Branch:** `feat/g01-foundation`
-**Latest Commit:** `40f7004` (G01-FIX final)
+**Branch:** `main` (merged from `feat/g01-foundation`; default branch)
+**Latest Commit:** `996ba63` (G01 evidence report — final state)
 **Repository:** `mayakilzy/SyrianTechRenaissance-Platform`
-**Latest CI Run:** [#38999754482](https://github.com/mayakilzy/SyrianTechRenaissance-Platform/actions/runs/38999754482) → BOTH jobs PASS ✅
+**Latest CI Run:** [#38999967979](https://github.com/mayakilzy/SyrianTechRenaissance-Platform/actions/runs/38999967979) → BOTH jobs PASS ✅
 
 > **Correction note (G01-FIX):** An earlier version of this report cited CI run
 > #38998237636 as successful. That run actually **FAILED** — it was the first
@@ -43,14 +43,17 @@
 
 ### Repository
 - **Code repo:** `mayakilzy/SyrianTechRenaissance-Platform` (public)
-- **Branch:** `feat/g01-foundation`
-- **Latest commit:** `40f7004` (G01-FIX — vitest 4.x upgrade to close last Dependabot alert)
-- **Commit history (G01):**
+- **Default branch:** `main` (set after G01 closure)
+- **Development branch (preserved):** `feat/g01-foundation`
+- **Latest commit on `main`:** `996ba63` (G01 evidence report — final state)
+- **Latest CI on `main`:** [#38999967979](https://github.com/mayakilzy/SyrianTechRenaissance-Platform/actions/runs/38999967979) → SUCCESS
+- **Commit history (G01, on `main`):**
   - `97687bd` — initial G01 foundation
   - `6fbb563` — add PostgreSQL migration files
   - `ab2fa82` — add G01 evidence report (original, now superseded)
   - `9b18000` — G01-FIX: security, CI quality, repo hygiene, proxy.ts migration
   - `40f7004` — G01-FIX: vitest 4.x upgrade (closes last Dependabot alert)
+  - `996ba63` — G01-FIX: final evidence report (this document)
 
 ### Working tree: clean (all changes committed)
 
@@ -171,9 +174,10 @@ session ends as a standard security hygiene practice.
 | 38998601024 | ab2fa82 | completed | ✅ success | After evidence report |
 | 38999577785 | 9b18000 | completed | ✅ success | G01-FIX commit 1 |
 | 38999586051 | 9b18000 | completed | ❌ failure | Dependabot npm_and_yarn (stale) |
-| **38999754482** | **40f7004** | completed | ✅ **success** | **G01-FIX final (latest)** |
+| 38999754482 | 40f7004 | completed | ✅ success | G01-FIX commit 2 (vitest 4.x) |
+| **38999967979** | **996ba63** | completed | ✅ **success** | **G01-FIX final docs commit (latest)** |
 
-### Latest CI run details (#38999754482, commit 40f7004)
+### Latest CI run details (#38999967979, commit 996ba63)
 
 **Job 1: Typecheck · Lint · Unit Tests — ✅ SUCCESS**
 - ✓ Install dependencies
@@ -329,6 +333,26 @@ bun run verify          # typecheck + lint + unit tests (all must pass)
 bun run dev             # http://localhost:3000 (Arabic) / http://localhost:3000/en (English)
 bun run test:e2e        # Playwright RTL + LTR screenshots
 ```
+
+---
+
+## G. Branch Closure (G01 → main)
+
+After founder and supervising reviewer acceptance of G01 + G01-FIX:
+
+1. **Created `main` branch** at commit `996ba63` (same SHA as `feat/g01-foundation`
+   tip) — full commit history preserved, no force push, no squash.
+2. **Pushed `main` to origin** — `git push -u origin main`.
+3. **Set `main` as default branch** on GitHub via API
+   (`PATCH /repos/{owner}/{repo}` with `{"default_branch":"main"}`).
+4. **Preserved `feat/g01-foundation`** as the development branch for traceability.
+
+**Branch state on GitHub (verified via API):**
+- `main` — default branch — SHA `996ba63` — CI #38999967979 SUCCESS
+- `feat/g01-foundation` — preserved — SHA `996ba63` — CI #38999754482 SUCCESS
+
+G02 development continues on a new branch `feat/g02-identity-profiles-roles`
+branched from `main`.
 
 ---
 
