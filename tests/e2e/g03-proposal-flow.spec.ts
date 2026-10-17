@@ -81,7 +81,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     await page.waitForURL(/\/proposals/, { timeout: 10000 });
 
     // ── Step 2: Submit the proposal ──
-    await page.click('a[href*="/proposals/"]').first();
+    await page.locator('a[href*="/proposals/"]').first().click();
     await page.waitForURL(/\/proposals\/[^/]+$/, { timeout: 5000 });
     const proposalUrl = page.url();
     const proposalId = proposalUrl.split("/").pop()!;
@@ -186,7 +186,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     await page.waitForURL(/\/proposals/, { timeout: 10000 });
 
     // Get the proposal ID.
-    await page.click('a[href*="/proposals/"]').first();
+    await page.locator('a[href*="/proposals/"]').first().click();
     await page.waitForURL(/\/proposals\/[^/]+$/, { timeout: 5000 });
     const proposalId = page.url().split("/").pop()!;
 
