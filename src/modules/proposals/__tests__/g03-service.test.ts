@@ -54,7 +54,7 @@ const validCharter = {
 
 beforeEach(async () => {
   // Clean up test data.
-  // Clean up in dependency order to avoid FK constraint errors.
+  // Clean up G03 entities only. Users created fresh each test (unique emails).
   await db.resourceGrant.deleteMany({});
   await db.teamInvitation.deleteMany({});
   await db.teamMembership.deleteMany({});
@@ -64,19 +64,6 @@ beforeEach(async () => {
   await db.project.deleteMany({});
   await db.charterRevision.deleteMany({});
   await db.projectProposal.deleteMany({});
-  // Clean up test users + their role grants.
-  const testEmails = await db.user.findMany({
-    where: { email: { contains: "g03-" } },
-    select: { id: true },
-  });
-  if (testEmails.length > 0) {
-    await db.roleGrant.deleteMany({
-      where: { userId: { in: testEmails.map((u) => u.id) } },
-    });
-    await db.user.deleteMany({
-      where: { id: { in: testEmails.map((u) => u.id) } },
-    });
-  }
 
   // Create test users.
   const submitter = await db.user.create({

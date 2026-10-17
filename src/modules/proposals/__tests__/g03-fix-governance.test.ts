@@ -52,17 +52,17 @@ const validCharter = {
 };
 
 beforeEach(async () => {
+  // Clean up G03 entities only. Users are created fresh each test with
+  // unique emails (Date.now + random), so they don't conflict.
   await db.resourceGrant.deleteMany({});
   await db.teamInvitation.deleteMany({});
   await db.teamMembership.deleteMany({});
   await db.stewardAssignment.deleteMany({});
   await db.team.deleteMany({});
-  await db.project.deleteMany({});
   await db.reviewDecision.deleteMany({});
+  await db.project.deleteMany({});
   await db.charterRevision.deleteMany({});
   await db.projectProposal.deleteMany({});
-  await db.roleGrant.deleteMany({ where: { userId: { in: [submitterId, reviewerId, stewardId, otherMemberId].filter(Boolean) } } });
-  await db.user.deleteMany({ where: { email: { contains: "g03fix" } } });
 
   // Create users with appropriate roles.
   const submitter = await db.user.create({
