@@ -1,13 +1,13 @@
 /**
- * STR Platform — Root Middleware
- * ------------------------------
+ * STR Platform — Root Proxy (Next.js 16)
+ * ----------------------------------------
  * Runs on every request. Three jobs, in order:
  *   1. Resolve / generate a request id and stamp it on the request + response.
- *   2. Apply minimal security controls (CSP-lite, hide server identity).
+ *   2. Apply minimal security controls (hide server identity, stamp version).
  *   3. Delegate locale routing to next-intl.
  *
- * next-intl's middleware is composed via `createMiddleware` so we don't
- * reimplement locale matching.
+ * In Next.js 16, `proxy.ts` replaces the deprecated `middleware.ts` convention.
+ * The API is identical: default export + `config` with a `matcher` array.
  *
  * See 02-Architecture §"security middleware, request tracing" and
  *     06-Engineering-Playbook §"per-resource authorization on backend".
@@ -20,7 +20,7 @@ import { resolveRequestId } from "@/lib/request-id";
 
 const intlMiddleware = createMiddleware(routing);
 
-export default function middleware(req: NextRequest) {
+export default function proxy(req: NextRequest) {
   // 1. Request id — resolve inbound or mint a new one.
   const headerName = process.env.REQUEST_ID_HEADER ?? "x-request-id";
   const inboundId = req.headers.get(headerName);

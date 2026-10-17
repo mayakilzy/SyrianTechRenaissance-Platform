@@ -91,7 +91,7 @@ export function loadEnv(): Env {
       `[STR] Environment configuration is invalid.\n` +
       `The application cannot start safely until these are corrected:\n${issues}\n` +
       `See .env.example for the expected shape.`;
-    // eslint-disable-next-line no-console
+     
     console.error(msg);
     throw new Error("STR_ENV_INVALID");
   }

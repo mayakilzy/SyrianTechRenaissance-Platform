@@ -15,7 +15,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  // eslint-disable-next-line no-console
+   
   console.log("→ STR seed: starting (G01 scope)");
 
   // 1. Mock provider — declared but NOT enabled. Its trust status is
@@ -75,13 +75,13 @@ async function main() {
     },
   });
 
-  // eslint-disable-next-line no-console
+   
   console.log("✓ STR seed: complete (provider + capability + synthetic admin)");
 }
 
 main()
   .catch((e) => {
-    // eslint-disable-next-line no-console
+     
     console.error("✗ STR seed failed:", e);
     process.exit(1);
   })

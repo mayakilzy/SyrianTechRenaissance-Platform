@@ -60,8 +60,18 @@ server.log
 /logs/
 /examples/
 /mini-services/
-/scripts/init-fullstack.sh
+/scripts/
 /.z-ai-config/
+/download/
+/worklog.md
+
+# Playwright output artifacts (screenshots are kept; results are ephemeral)
+tests/e2e/results/
+tests/e2e/report/
+
+# Scaffold runtime scripts (not part of STR Platform)
+tests/*-runtime-*.sh
+tests/database-runtime-*.sh
 
 # prisma local sqlite (sandbox shadow only)
 /prisma/*.db

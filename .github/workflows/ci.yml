@@ -76,7 +76,6 @@ jobs:
 
       - name: Lint
         run: bun run lint
-        continue-on-error: true # G01: lint warnings don't block; errors do.
 
       - name: Unit tests
         run: bun run test

@@ -44,7 +44,7 @@ function getClient(): PrismaClient {
 export const db = new Proxy({} as PrismaClient, {
   get(_t, prop: string) {
     const client = getClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const value = (client as any)[prop];
     return typeof value === "function" ? value.bind(client) : value;
   },

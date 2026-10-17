@@ -15,7 +15,7 @@ export default function Error({
   useEffect(() => {
     // Structured logging happens server-side; this is a client-side fallback
     // so the user sees a controlled state instead of a raw crash.
-    // eslint-disable-next-line no-console
+     
     console.error("[STR] route error:", error.message, error.digest);
   }, [error]);
 

@@ -55,11 +55,11 @@ function write(level: LogLevel, msg: string, ctx: LogContext = {}): void {
       ? JSON.stringify(entry, null, 0) // single-line even in dev for grep-ability
       : JSON.stringify(entry);
 
-  // eslint-disable-next-line no-console
+   
   if (level === "fatal" || level === "error") console.error(line);
-  // eslint-disable-next-line no-console
+   
   else if (level === "warn") console.warn(line);
-  // eslint-disable-next-line no-console
+   
   else console.log(line);
 }
 

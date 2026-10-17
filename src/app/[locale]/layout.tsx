@@ -47,7 +47,11 @@ export default async function LocaleLayout({
   return (
     <html lang={loc} dir={dir} suppressHydrationWarning>
       <head>
-        {/* Noto Sans Arabic loaded via <link> (next/font/google Turbopack bug workaround). */}
+        {/* Noto Sans Arabic loaded via <link> because next/font/google's
+            Turbopack integration has a bug with multi-weight Arabic fonts
+            ("queries have exactly one entry"). See ADR-01 deviations.
+            Revisit when the upstream bug is fixed. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap"
