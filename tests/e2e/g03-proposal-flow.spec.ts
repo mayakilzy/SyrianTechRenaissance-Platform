@@ -58,7 +58,7 @@ async function getUserId(page: import("@playwright/test").Page): Promise<string>
   return match?.[1] ?? "";
 }
 
-test.describe.skip("G03 — Proposal test.describe("G03 — Proposal & Team Governance E2E" Team Governance E2E (see note)", () => {
+test.describe.skip("G03 — Proposal & Team Governance E2E (skipped — see note)", () => {
   test("full journey: propose → review → revise → approve → team → invite", async ({ page, request }) => {
     // ── Step 1: Sign up all users ──
     await signupAndVerify(page, PROPOSER_EMAIL, "G03 Proposer");
