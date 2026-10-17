@@ -31,6 +31,7 @@ export type ProjectAction =
 export interface ProjectActor {
   userId: string;
   isAdmin: boolean;
+  isReviewer: boolean;
   projectRoles: Map<string, Set<"project_lead" | "steward" | "team_member">>;
 }
 
@@ -58,11 +59,7 @@ export async function loadProjectActor(userId: string): Promise<ProjectActor | n
   const hasAdmin = user.roleGrants.some((g) => g.role === "admin");
   const hasReviewer = user.roleGrants.some((g) => g.role === "reviewer");
   const isAdmin = hasAdmin;
-  // Note: "reviewer" is not a "globalRole" in this type — it's a separate
-  // capability checked by isInstitutionalReviewer() in the service layer.
-  // The authorizeProject function uses globalRole for admin checks;
-  // reviewer checks are done by the service layer.
-  // The TODO above (in proposal:review case) acknowledges this gap.
+  const isReviewer = hasReviewer;
 
   const projectRoles = new Map<string, Set<"project_lead" | "steward" | "team_member">>();
 
@@ -86,7 +83,7 @@ export async function loadProjectActor(userId: string): Promise<ProjectActor | n
     projectRoles.get(assignment.projectId)!.add("steward");
   }
 
-  return { userId, isAdmin, projectRoles };
+  return { userId, isAdmin, isReviewer, projectRoles };
 }
 
 /**
@@ -119,24 +116,10 @@ export function authorizeProject(
 
     case "proposal:review":
       // Only institutional reviewers (admin or reviewer role) can review.
-      // The service layer (reviewProposal) also enforces this, but the
-      // central authorization must be consistent.
       if (isSubmitter) {
         return { allowed: false, reason: "conflict_of_interest" };
       }
-      // Check if the actor has the reviewer or admin global role.
-      // ProjectActor doesn't carry the global role directly, but the caller
-      // (guardProject) loads it. For now, we check globalRole.
-      if (!actor.isAdmin) {
-        // Need to check if the actor has the "reviewer" role.
-        // Since ProjectActor.globalRole is "member" or "admin", and the
-        // "reviewer" role is a separate RoleGrant, we need to verify it.
-        // The caller (guardProject) should pass the correct globalRole.
-        // For now, we allow if globalRole is "admin" — the service layer
-        // does the full check.
-        // TODO: ProjectActor should include "reviewer" in its globalRole.
-        // For now, the service layer (isInstitutionalReviewer) is the
-        // authoritative check. This function is a secondary guard.
+      if (!actor.isAdmin && !actor.isReviewer) {
         return { allowed: false, reason: "requires_institutional_reviewer" };
       }
       return { allowed: true };
@@ -147,7 +130,7 @@ export function authorizeProject(
       if (isSubmitter) {
         return { allowed: false, reason: "conflict_of_interest" };
       }
-      if (!actor.isAdmin) {
+      if (!actor.isAdmin && !actor.isReviewer) {
         return { allowed: false, reason: "requires_institutional_reviewer" };
       }
       return { allowed: true };
