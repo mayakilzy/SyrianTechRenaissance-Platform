@@ -78,7 +78,7 @@ test.describe("STR Auth — signup → verify → login flow", () => {
     // Should show generic error (no indication of which field is wrong)
     await expect(
       page.locator("text=Invalid email or password").or(
-        page.locator("text="بريد إلكتروني أو كلمة مرور غير صحيحة"),
+        page.locator('text=بريد إلكتروني أو كلمة مرور غير صحيحة'),
       ),
     ).toBeVisible({ timeout: 10_000 });
   });
@@ -109,7 +109,7 @@ test.describe("STR Auth — signup → verify → login flow", () => {
 
     // Generic message (enumeration defense)
     await expect(
-      page.locator("text=password reset link").or(page.locator("text="رابط إعادة تعيين")),
+      page.locator("text=password reset link").or(page.locator('text=رابط إعادة تعيين')),
     ).toBeVisible({ timeout: 10_000 });
 
     // ── Extract reset token ──
@@ -131,7 +131,7 @@ test.describe("STR Auth — signup → verify → login flow", () => {
 
     // Should show success
     await expect(
-      page.locator("text=reset successfully").or(page.locator("text="بنجاح")),
+      page.locator("text=reset successfully").or(page.locator('text=بنجاح')),
     ).toBeVisible({ timeout: 10_000 });
   });
 });
