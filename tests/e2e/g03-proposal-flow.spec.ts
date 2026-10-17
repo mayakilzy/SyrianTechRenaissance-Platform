@@ -245,6 +245,8 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ charter }),
       });
+      const body = await res.json().catch(() => null);
+      console.log(`[DIAG] Revise API: status=${res.status}, body=${JSON.stringify(body)}`);
       return { status: res.status };
     }, {
       proposalId,
@@ -373,6 +375,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
       "Approved for scope change testing purposes.",
       stewardId,
     );
+    console.log(`[DIAG] Scope-change approve: status=${approveResult.status}, body=${JSON.stringify(approveResult.body)}`);
     expect(approveResult.status).toBe(200);
     await reviewerCtx.close();
     await stewardCtx.close();
