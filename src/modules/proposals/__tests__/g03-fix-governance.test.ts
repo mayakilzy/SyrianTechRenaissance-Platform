@@ -127,7 +127,7 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-describe("G03-FIX §1 — Institutional reviewer authorization", () => {
+describe.sequential("G03-FIX §1 — Institutional reviewer authorization", () => {
   it("blocks a regular member from reviewing (no reviewer role)", async () => {
     const proposal = await createProposal({ submitterId, title: "Auth Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -163,7 +163,7 @@ describe("G03-FIX §1 — Institutional reviewer authorization", () => {
   });
 });
 
-describe("G03-FIX §2 — Steward qualification", () => {
+describe.sequential("G03-FIX §2 — Steward qualification", () => {
   it("blocks approval when steward is not qualified (no admin/steward role)", async () => {
     const proposal = await createProposal({ submitterId, title: "Unqualified Steward", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -216,7 +216,7 @@ describe("G03-FIX §2 — Steward qualification", () => {
   });
 });
 
-describe("G03-FIX §3 — Inside-service authorization for suspend/reactivate", () => {
+describe.sequential("G03-FIX §3 — Inside-service authorization for suspend/reactivate", () => {
   async function setupApprovedProject() {
     const proposal = await createProposal({ submitterId, title: "Govern Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -271,7 +271,7 @@ describe("G03-FIX §3 — Inside-service authorization for suspend/reactivate", 
   });
 });
 
-describe("G03-FIX §4 — Atomicity: ReviewDecision not recorded on approval failure", () => {
+describe.sequential("G03-FIX §4 — Atomicity: ReviewDecision not recorded on approval failure", () => {
   it("does NOT record a ReviewDecision if approval fails", async () => {
     const proposal = await createProposal({ submitterId, title: "Atomicity Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -297,7 +297,7 @@ describe("G03-FIX §4 — Atomicity: ReviewDecision not recorded on approval fai
   });
 });
 
-describe("G03-FIX §5 — Concurrent approval (idempotency under race)", () => {
+describe.sequential("G03-FIX §5 — Concurrent approval (idempotency under race)", () => {
   it("handles concurrent approval attempts: exactly one team created", async () => {
     const proposal = await createProposal({ submitterId, title: "Concurrent Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -338,7 +338,7 @@ describe("G03-FIX §5 — Concurrent approval (idempotency under race)", () => {
   });
 });
 
-describe("G03-FIX §7 — Steward and lead change", () => {
+describe.sequential("G03-FIX §7 — Steward and lead change", () => {
   it("allows admin to change steward to a qualified user", async () => {
     const proposal = await createProposal({ submitterId, title: "Steward Change", charter: validCharter });
     await submitProposal(proposal.id, submitterId);

@@ -138,7 +138,7 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-describe("G03 — Proposal lifecycle", () => {
+describe.sequential("G03 — Proposal lifecycle", () => {
   it("creates a proposal in DRAFT with a charter revision", async () => {
     const proposal = await createProposal({
       submitterId,
@@ -163,7 +163,7 @@ describe("G03 — Proposal lifecycle", () => {
   });
 });
 
-describe("G03 — Conflict of interest (no self-review)", () => {
+describe.sequential("G03 — Conflict of interest (no self-review)", () => {
   it("prevents submitter from reviewing their own proposal", async () => {
     const proposal = await createProposal({ submitterId, title: "Self-Review Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -193,7 +193,7 @@ describe("G03 — Conflict of interest (no self-review)", () => {
   });
 });
 
-describe("G03 — Atomic team creation (STR-GOV-TEAM-01)", () => {
+describe.sequential("G03 — Atomic team creation (STR-GOV-TEAM-01)", () => {
   it("creates Project + Team + Steward + Lead in one transaction on approval", async () => {
     const proposal = await createProposal({ submitterId, title: "Atomic Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -256,7 +256,7 @@ describe("G03 — Atomic team creation (STR-GOV-TEAM-01)", () => {
   });
 });
 
-describe("G03 — Team membership & invitations", () => {
+describe.sequential("G03 — Team membership & invitations", () => {
   it("allows lead to invite a member who accepts", async () => {
     const proposal = await createProposal({ submitterId, title: "Invite Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -305,7 +305,7 @@ describe("G03 — Team membership & invitations", () => {
   });
 });
 
-describe("G03 — Project suspension (scope control)", () => {
+describe.sequential("G03 — Project suspension (scope control)", () => {
   it("allows steward to suspend, revoking resource grants", async () => {
     const proposal = await createProposal({ submitterId, title: "Suspend Test", charter: validCharter });
     await submitProposal(proposal.id, submitterId);
@@ -333,7 +333,7 @@ describe("G03 — Project suspension (scope control)", () => {
   });
 });
 
-describe("G03 — No direct team creation (structural)", () => {
+describe.sequential("G03 — No direct team creation (structural)", () => {
   it("teams module does NOT export createTeam", async () => {
     const teamsModule = await import("@/modules/teams/service");
     expect((teamsModule as Record<string, unknown>).createTeam).toBeUndefined();
