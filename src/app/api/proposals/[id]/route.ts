@@ -42,9 +42,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     );
 
     if (!isSubmitter && !isAdmin && !isReviewer && !isTeamMember) {
-      // For reviewers, only allow reading SUBMITTED proposals (review queue).
-      // For others, deny.
       throw new ForbiddenError("You do not have access to this proposal");
+    }
+
+    // DRAFT proposals: only the submitter and admins can read them.
+    // Reviewers can only read SUBMITTED proposals (the review queue).
+    // This prevents a reviewer from reading someone's unfinished draft.
+    if (proposal.status === "DRAFT" && !isSubmitter && !isAdmin) {
+      throw new ForbiddenError("You do not have access to this proposal");
+    }
+
+    // Reviewers (who are not the submitter) can only read proposals that
+    // are in the review queue (SUBMITTED) or have been reviewed
+    // (APPROVED, REJECTED, NEEDS_REVISION, WITHDRAWN).
+    // DRAFT is already handled above.
+    if (isReviewer && !isSubmitter && !isAdmin && !isTeamMember) {
+      // Reviewer access is limited to non-DRAFT proposals.
+      // (DRAFT was already blocked above for non-submitter non-admin.)
+      // No additional restriction needed here — DRAFT is the only
+      // status that should be hidden from reviewers.
     }
 
     return apiSuccess({ proposal });
