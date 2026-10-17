@@ -251,7 +251,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
       const res = await fetch(`/api/proposals/${proposalId}/revise`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ charter }),
+        body: JSON.stringify(charter),
       });
       const body = await res.json().catch(() => null);
       console.log(`[DIAG] Revise API: status=${res.status}, body=${JSON.stringify(body)}`);
@@ -409,7 +409,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
       const res = await fetch(`/api/proposals/${proposalId}/scope-change`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ charter, reason }),
+        body: JSON.stringify({ ...charter, reason }),
       });
       return { status: res.status, body: await res.json().catch(() => null) };
     }, {
