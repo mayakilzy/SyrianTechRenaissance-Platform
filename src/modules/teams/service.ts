@@ -48,7 +48,7 @@ export async function inviteMember(input: InviteInput) {
 
   // Only the lead or steward can invite.
   const inviterMembership = team.memberships.find(
-    (m) => m.userId === input.inviterId && m.role in ["LEAD", "STEWARD"] && !m.leftAt,
+    (m) => m.userId === input.inviterId && ["LEAD", "STEWARD"].includes(m.role) && !m.leftAt,
   );
   if (!inviterMembership) {
     throw new ForbiddenError("Only the team lead or steward can invite members");
