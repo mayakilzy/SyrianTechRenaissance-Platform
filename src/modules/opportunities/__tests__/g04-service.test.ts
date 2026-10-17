@@ -309,6 +309,71 @@ describe("G04 — Privacy & Authorization", () => {
   });
 });
 
+
+describe("G04 — Decision guard: no decisions on closed/cancelled opportunities", () => {
+  it("prevents decision on application when opportunity is CLOSED", async () => {
+    run = startTestRun();
+    const creatorId = await createTestUser(run, "member");
+    const reviewerId = await createTestUser(run, "reviewer");
+    const applicantId = await createTestUser(run, "member");
+
+    const opp = await createOpportunity(creatorId, validOpp);
+    await submitOpportunity(opp.id, creatorId);
+    await reviewOpportunity({
+      opportunityId: opp.id, reviewerId, action: "APPROVE",
+      reason: "Approved for closed-opportunity decision guard test.",
+    });
+
+    const app = await applyForOpportunity(opp.id, applicantId, "Apply before close.");
+    await closeOpportunity(opp.id, creatorId);
+
+    await expect(
+      decideApplication(app.id, creatorId, "ACCEPTED", "Trying to accept after close."),
+    ).rejects.toThrow(ConflictError);
+  });
+
+  it("prevents decision on application when opportunity is CANCELLED", async () => {
+    run = startTestRun();
+    const creatorId = await createTestUser(run, "member");
+    const reviewerId = await createTestUser(run, "reviewer");
+    const applicantId = await createTestUser(run, "member");
+
+    const opp = await createOpportunity(creatorId, validOpp);
+    await submitOpportunity(opp.id, creatorId);
+    await reviewOpportunity({
+      opportunityId: opp.id, reviewerId, action: "APPROVE",
+      reason: "Approved for cancelled-opportunity decision guard test.",
+    });
+
+    const app = await applyForOpportunity(opp.id, applicantId, "Apply before cancel.");
+    await cancelOpportunity(opp.id, creatorId);
+
+    await expect(
+      decideApplication(app.id, creatorId, "ACCEPTED", "Trying to accept after cancel."),
+    ).rejects.toThrow(ConflictError);
+  });
+
+  it("allows decision when opportunity is still PUBLISHED", async () => {
+    run = startTestRun();
+    const creatorId = await createTestUser(run, "member");
+    const reviewerId = await createTestUser(run, "reviewer");
+    const applicantId = await createTestUser(run, "member");
+
+    const opp = await createOpportunity(creatorId, validOpp);
+    await submitOpportunity(opp.id, creatorId);
+    await reviewOpportunity({
+      opportunityId: opp.id, reviewerId, action: "APPROVE",
+      reason: "Approved for published-opportunity decision test.",
+    });
+
+    const app = await applyForOpportunity(opp.id, applicantId, "Apply to published.");
+    await decideApplication(app.id, creatorId, "ACCEPTED", "Accepted on published opportunity.");
+
+    const updated = await db.opportunityApplication.findUnique({ where: { id: app.id } });
+    expect(updated?.status).toBe("ACCEPTED");
+  });
+});
+
 describe("G04 — Concurrent operations", () => {
   it("concurrent reviews: exactly one succeeds (optimistic lock)", async () => {
     run = startTestRun();

@@ -403,6 +403,14 @@ export async function decideApplication(
     throw new ConflictError(`Cannot decide on application in status ${application.status}`);
   }
 
+  // G04-FINAL-DECISION-GUARD: no decisions on CLOSED or CANCELLED opportunities.
+  // This prevents accepting someone into an opportunity that no longer exists.
+  if (application.opportunity.status === "CLOSED" || application.opportunity.status === "CANCELLED") {
+    throw new ConflictError(
+      `Cannot decide on application: opportunity is ${application.opportunity.status}`,
+    );
+  }
+
   // Only the opportunity creator or institutional reviewers can decide.
   if (application.opportunity.createdById !== decisionMakerId) {
     const isReviewer = await db.roleGrant.findFirst({
