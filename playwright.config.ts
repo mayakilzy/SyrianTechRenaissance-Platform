@@ -2,8 +2,6 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * STR Platform — Playwright config
- * Verifies real browser behavior for both Arabic (RTL) and English (LTR).
- * Screenshots are saved to tests/e2e/screenshots/ as G01 acceptance evidence.
  */
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -24,14 +22,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  // The dev server is managed externally by the sandbox (see fullstack-dev skill).
-  // For CI, Playwright starts its own web server with NODE_ENV=test so that
-  // the /api/test/last-email route is enabled for E2E token extraction.
-  // In production builds, that route is gated and returns 404 (verified by
-  // the security-negative.spec.ts test).
+  // The CI job-level env (in .github/workflows/ci.yml) sets STR_TEST_MODE=1,
+  // so the web server inherits it. We don't prefix the command here to avoid
+  // shell-quoting issues. The dev server reads STR_TEST_MODE from process.env.
   webServer: process.env.CI
     ? {
-        command: "STR_TEST_MODE=1 bun run dev",
+        command: "bun run dev",
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 60_000,
