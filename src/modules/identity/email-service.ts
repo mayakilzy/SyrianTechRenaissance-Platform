@@ -98,7 +98,7 @@ export class CaptureEmailService implements EmailService {
 let captureService: CaptureEmailService | null = null;
 
 export function getEmailService(): EmailService {
-  if (process.env.NODE_ENV === "test") {
+  if (process.env.STR_TEST_MODE === "1") {
     if (!captureService) captureService = new CaptureEmailService();
     return captureService;
   }
@@ -109,7 +109,7 @@ export function getEmailService(): EmailService {
 
 /** Test-only accessor for the CaptureEmailService singleton. */
 export function getCaptureEmailService(): CaptureEmailService {
-  if (process.env.NODE_ENV !== "test") {
+  if (process.env.STR_TEST_MODE !== "1") {
     throw new Error("CaptureEmailService is only available in test environment");
   }
   if (!captureService) captureService = new CaptureEmailService();

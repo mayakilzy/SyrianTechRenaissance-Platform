@@ -31,7 +31,7 @@ export default defineConfig({
   // the security-negative.spec.ts test).
   webServer: process.env.CI
     ? {
-        command: "NODE_ENV=test bun run dev",
+        command: "STR_TEST_MODE=1 bun run dev",
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 60_000,
