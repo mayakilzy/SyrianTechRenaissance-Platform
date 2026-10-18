@@ -128,6 +128,28 @@ export async function cleanupTestRun(run: TestRun): Promise<void> {
     });
     await db.organization.deleteMany({ where: { id: { in: run.organizationIds } } });
   }
+  // G07: clean up integration entities
+  if (run.projectIds.length > 0) {
+    const connections = await db.integrationConnection.findMany({
+      where: { subjectId: { in: run.projectIds } },
+      select: { id: true },
+    });
+    const connectionIds = connections.map((c) => c.id);
+    if (connectionIds.length > 0) {
+      const jobs = await db.integrationJob.findMany({
+        where: { connectionId: { in: connectionIds } },
+        select: { id: true },
+      });
+      const jobIds = jobs.map((j) => j.id);
+      if (jobIds.length > 0) {
+        await db.outboxEvent.deleteMany({ where: { aggregateId: { in: jobIds } } });
+        await db.integrationEvent.deleteMany({ where: { jobId: { in: jobIds } } });
+        await db.integrationJob.deleteMany({ where: { id: { in: jobIds } } });
+      }
+      await db.integrationConnection.deleteMany({ where: { id: { in: connectionIds } } });
+    }
+  }
+
   if (run.userIds.length > 0) {
     await db.auditEvent.deleteMany({ where: { actorId: { in: run.userIds } } });
     await db.notification.deleteMany({ where: { userId: { in: run.userIds } } });
