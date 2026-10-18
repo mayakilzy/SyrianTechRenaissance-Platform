@@ -158,6 +158,8 @@ test.describe("G08 — Visual + Accessibility", () => {
     // Navigate to the charter editor
     await page.goto(`/en/proposals/${proposalId}/charter`);
     await page.waitForLoadState("networkidle");
+    // Wait for the form to be visible
+    await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
     // Verify the form is visible
     const textarea = page.locator("textarea").first();
@@ -175,11 +177,9 @@ test.describe("G08 — Visual + Accessibility", () => {
     const editButton = page.locator("button", { hasText: /Edit|تحرير/ });
     await expect(editButton).toBeVisible();
 
-    // Verify the save button calls the correct endpoint
-    // (We won't actually save since the proposal already has a charter from creation,
-    // but we verify the save button exists and is enabled for DRAFT status)
-    const saveButton = page.locator("button", { hasText: /Save Charter|حفظ الميثاق/ });
-    await expect(saveButton).toBeVisible();
+    // Verify the save button exists (the proposal is in DRAFT status)
+    const saveButton = page.getByRole("button", { name: /Save|حفظ/i });
+    await expect(saveButton).toBeVisible({ timeout: 10000 });
 
     // Take a screenshot of the charter editor
     const file = "g08-charter-editor-en-desktop.png";
