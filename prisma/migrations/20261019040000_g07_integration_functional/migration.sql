@@ -43,3 +43,8 @@ ALTER TABLE "IntegrationJob" ADD CONSTRAINT "IntegrationJob_cancelledById_fkey" 
 
 -- 6. Drop the subjectId FK to User (polymorphic — subjectKind determines the table)
 ALTER TABLE "IntegrationConnection" DROP CONSTRAINT IF EXISTS "IntegrationConnection_subjectId_fkey";
+
+-- 7. Add lease fields to OutboxEvent (for durable recovery)
+ALTER TABLE "OutboxEvent" ADD COLUMN "claimedAt" TIMESTAMP(3);
+ALTER TABLE "OutboxEvent" ADD COLUMN "claimedBy" TEXT;
+CREATE INDEX "OutboxEvent_claimedAt_dispatchedAt_idx" ON "OutboxEvent"("claimedAt", "dispatchedAt");
