@@ -10,6 +10,7 @@
 
 import { db } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
+import { Prisma } from "@prisma/client";
 import { isAdmin } from "@/modules/organizations/service";
 
 async function assertAdmin(userId: string) {
@@ -79,7 +80,7 @@ export async function getAdminDashboardStats(actorId: string) {
 export async function listAllProposals(actorId: string, filter?: { status?: string }) {
   await assertAdmin(actorId);
   return db.projectProposal.findMany({
-    where: filter?.status ? { status: filter.status } : undefined,
+    where: filter?.status ? { status: filter.status as Prisma.EnumProposalStatusFilter } : undefined,
     orderBy: { createdAt: "desc" },
     include: {
       submitter: { select: { id: true, displayName: true, email: true } },

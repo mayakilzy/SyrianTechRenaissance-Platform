@@ -18,7 +18,7 @@ export default async function PartnershipsPage({ params }: { params: Promise<{ l
 
   let partnerships: Awaited<ReturnType<typeof listPartnershipRequests>> = [];
   try {
-    partnerships = await listPartnershipRequests(session.user.id);
+    partnerships = (await listPartnershipRequests(session.user.id)) as Awaited<ReturnType<typeof listPartnershipRequests>>;
   } catch {
     // Not authorized → empty state
   }

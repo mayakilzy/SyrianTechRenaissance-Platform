@@ -34,6 +34,7 @@ import {
   ForbiddenError,
 } from "@/lib/errors";
 import { z } from "zod/v4";
+import { Prisma } from "@prisma/client";
 import { notify } from "@/modules/notifications/service";
 import { isAdmin, isModerator } from "@/modules/organizations/service";
 
@@ -147,7 +148,7 @@ export async function listComplaints(
   }
   return db.moderationComplaint.findMany({
     where: {
-      ...(filter?.status && { status: filter.status }),
+      ...(filter?.status && { status: filter.status as Prisma.EnumModerationStatusFilter }),
       ...(filter?.projectId && { projectId: filter.projectId }),
       ...(filter?.targetUserId && { targetUserId: filter.targetUserId }),
     },

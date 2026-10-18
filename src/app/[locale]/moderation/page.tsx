@@ -15,7 +15,7 @@ export default async function ModerationPage({ params }: { params: Promise<{ loc
 
   let complaints: Awaited<ReturnType<typeof listComplaints>> = [];
   try {
-    complaints = await listComplaints(session.user.id);
+    complaints = (await listComplaints(session.user.id)) as Awaited<ReturnType<typeof listComplaints>>;
   } catch {
     // Non-moderator/admin → empty
   }
