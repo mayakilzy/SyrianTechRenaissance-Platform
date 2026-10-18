@@ -419,7 +419,7 @@ export async function receiveWebhookEvent(params: {
         providerEventId: params.providerEventId,
         connectionId: params.connectionId ?? null,
         type: params.type,
-        payload: params.payload,
+        payload: params.payload as never,
         signatureValid: params.signatureValid,
       },
     });
