@@ -77,7 +77,7 @@ describe("G06-B — Project threads lifecycle", () => {
     expect(thread.topic).toBe("general");
     const fetched = await getThread(thread.id, leadId);
     expect(fetched.messages.length).toBe(1);
-    expect(fetched.messages[0].body).toContain("first message");
+    expect(fetched.messages[0]?.body ?? "").toContain("first message");
   });
 
   it("project participant can post messages", async () => {
