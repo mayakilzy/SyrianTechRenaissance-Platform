@@ -41,7 +41,7 @@ export default async function OpportunitiesPage({ params, searchParams }: {
     >
       <SiteHeader />
       <div className="container mx-auto px-4 sm:px-6 py-8">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold">{t("title")}</h1>
           <Button asChild><Link href="/opportunities/new">{t("createOpportunity")}</Link></Button>
         </div>
