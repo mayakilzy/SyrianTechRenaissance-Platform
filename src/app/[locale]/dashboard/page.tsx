@@ -6,9 +6,13 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { useLocale } from "next-intl";
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
 
 export default function DashboardPage() {
   const t = useTranslations("auth");
+  const locale = useLocale();
   const { data: session, status } = useSession();
 
   if (status === "loading") {

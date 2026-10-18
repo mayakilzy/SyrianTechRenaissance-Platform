@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { Locale } from "@/i18n/config";
 import { routing } from "@/i18n/routing";
+import { SiteFooter } from "@/components/shared/site-footer";
+import { SiteHeader } from "@/components/shared/site-header";
 
 export default async function HomePage({
   params,
