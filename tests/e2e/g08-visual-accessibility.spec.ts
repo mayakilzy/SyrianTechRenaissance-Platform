@@ -52,8 +52,15 @@ async function signin(page: import("@playwright/test").Page, email: string, pass
 
 
 // Helper: take a screenshot and record it
+// Scroll to top before capture so that sticky-position elements (e.g. SiteHeader
+// with `position: sticky; top: 0`) appear at their natural document position
+// (top of the page) in the screenshot. Without this, sticky elements render at
+// the current scroll position, producing a "mid-screenshot header" artifact
+// in Playwright's fullPage capture mode.
 async function screenshot(page: import("@playwright/test").Page, name: string, pageName: string, locale: string, viewport: string) {
   const file = `g08-${name}-${locale}-${viewport}.png`;
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForLoadState("networkidle");
   await page.screenshot({ path: join(SCREENSHOTS_DIR, file), fullPage: true });
   recordScreenshot(file, pageName, locale, viewport);
 }
@@ -350,7 +357,14 @@ test.describe("G08 — Visual + Accessibility", () => {
     await page.waitForLoadState("networkidle");
     await screenshot(page, "organizations", "Organizations", "ar", "desktop");
   });
-  // Arabic mobile screenshots for institutional pages (G08 Round 2)
+  // =====================================================================
+  // G08 FINAL ACCEPTANCE — Authenticated mobile screenshots for
+  // essential institutional journeys. Per ChatGPT directive: "don't
+  // consider a signin-redirect screenshot as proof of responsive for
+  // protected pages." All tests below SIGN IN with the appropriate
+  // synthetic test user before capturing.
+  // =====================================================================
+
   test("signin page — Arabic mobile", async ({ browser }) => {
     test.setTimeout(30000);
     const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
@@ -360,33 +374,124 @@ test.describe("G08 — Visual + Accessibility", () => {
     await screenshot(page, "signin", "Sign-in", "ar", "mobile");
   });
 
-  test("organizations — Arabic mobile (unauth redirects to signin)", async ({ browser }) => {
-    test.setTimeout(30000);
+  test("proposals — English mobile (authenticated as member)", async ({ browser }) => {
+    test.setTimeout(60000);
     const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
     const page = await ctx.newPage();
-    // Unauthenticated visit — should redirect to /ar/auth/signin
-    await page.goto("/ar/organizations");
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/en/proposals");
     await page.waitForLoadState("networkidle");
-    // Capture whatever state we land on (signin redirect or list page)
-    await screenshot(page, "organizations-ar-mobile", "Organizations", "ar", "mobile");
+    await screenshot(page, "proposals", "Proposals List", "en", "mobile");
   });
 
-  test("admin dashboard — Arabic mobile (unauth redirects to signin)", async ({ browser }) => {
-    test.setTimeout(30000);
+  test("proposals — Arabic mobile (authenticated as member)", async ({ browser }) => {
+    test.setTimeout(60000);
     const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
     const page = await ctx.newPage();
-    await page.goto("/ar/admin");
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/ar/proposals");
     await page.waitForLoadState("networkidle");
-    await screenshot(page, "admin-ar-mobile", "Admin Dashboard", "ar", "mobile");
+    await screenshot(page, "proposals", "Proposals List", "ar", "mobile");
   });
 
-  test("organizations — English mobile (unauth redirects to signin)", async ({ browser }) => {
-    test.setTimeout(30000);
+  test("talent — English mobile (authenticated as member)", async ({ browser }) => {
+    test.setTimeout(60000);
     const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
     const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/en/talent");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "talent", "Talent Directory", "en", "mobile");
+  });
+
+  test("talent — Arabic mobile (authenticated as member)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/ar/talent");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "talent", "Talent Directory", "ar", "mobile");
+  });
+
+  test("opportunities — English mobile (authenticated as member)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/en/opportunities");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "opportunities", "Opportunities", "en", "mobile");
+  });
+
+  test("organizations — English mobile (authenticated as admin)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
     await page.goto("/en/organizations");
     await page.waitForLoadState("networkidle");
-    await screenshot(page, "organizations-en-mobile", "Organizations", "en", "mobile");
+    await screenshot(page, "organizations", "Organizations", "en", "mobile");
+  });
+
+  test("organizations — Arabic mobile (authenticated as admin)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
+    await page.goto("/ar/organizations");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "organizations", "Organizations", "ar", "mobile");
+  });
+
+  test("partnerships — English mobile (authenticated as admin)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
+    await page.goto("/en/partnerships");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "partnerships", "Partnerships", "en", "mobile");
+  });
+
+  test("admin dashboard — English mobile (authenticated as admin)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
+    await page.goto("/en/admin");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "admin", "Admin Dashboard", "en", "mobile");
+  });
+
+  test("admin dashboard — Arabic mobile (authenticated as admin)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
+    await page.goto("/ar/admin");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "admin", "Admin Dashboard", "ar", "mobile");
+  });
+
+  test("moderation queue — English mobile (authenticated as moderator)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "moderator@str.platform.local", "ModeratorPass123!");
+    await page.goto("/en/moderation");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "moderation", "Moderation Queue", "en", "mobile");
+  });
+
+  test("integrations — English mobile (authenticated as member)", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/en/integrations");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "integrations", "Integrations", "en", "mobile");
   });
 
   test("horizontal overflow check — EN mobile home does not exceed 375px viewport", async ({ browser }) => {
