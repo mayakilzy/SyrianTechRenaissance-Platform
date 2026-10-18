@@ -357,5 +357,49 @@ test.describe("G08 — Visual + Accessibility", () => {
     // Verify submit button is keyboard accessible
     const submitBtn = page.locator('button[type="submit"]');
     await expect(submitBtn).toBeVisible();
+  
+
+  test("proposals list — Arabic desktop", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/ar/proposals");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "proposals", "Proposals List", "ar", "desktop");
+  });
+
+  test("admin dashboard — Arabic desktop", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
+    await page.goto("/ar/admin");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "admin", "Admin Dashboard", "ar", "desktop");
+  });
+
+  test("organizations — Arabic desktop", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await signin(page, "test-admin@str.platform.local", "AdminPass123!");
+    await page.goto("/ar/organizations");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "organizations", "Organizations", "ar", "desktop");
+  });
+
+  test("horizontal overflow check — no content exceeds viewport on mobile", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/en");
+    await page.waitForLoadState("networkidle");
+    // Check that the page doesn't have horizontal scrollbar
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalScroll).toBe(false);
   });
 });
+}

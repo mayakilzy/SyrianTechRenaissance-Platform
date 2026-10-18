@@ -22,8 +22,15 @@ export default async function AdminDashboardPage({ params }: { params: Promise<{
   return (
     <div className="min-h-screen bg-background" dir={locale === "ar" ? "rtl" : "ltr"}>
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <header>
-          <h1 className="text-3xl font-bold">{locale === "ar" ? "لوحة الإدارة" : "Admin Dashboard"}</h1>
+        <header className="space-y-4">
+          <h1 className="text-2xl sm:text-3xl font-bold">{locale === "ar" ? "لوحة الإدارة" : "Admin Dashboard"}</h1>
+          <nav className="flex flex-wrap gap-2" role="navigation" aria-label={locale === "ar" ? "تنقل الإدارة" : "Admin navigation"}>
+            <Link href={`/${locale}/admin`} className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground">{locale === "ar" ? "نظرة عامة" : "Overview"}</Link>
+            <Link href={`/${locale}/organizations`} className="px-3 py-1.5 text-sm rounded-md hover:bg-muted">{locale === "ar" ? "المنظمات" : "Organizations"}</Link>
+            <Link href={`/${locale}/partnerships`} className="px-3 py-1.5 text-sm rounded-md hover:bg-muted">{locale === "ar" ? "الشراكات" : "Partnerships"}</Link>
+            <Link href={`/${locale}/moderation`} className="px-3 py-1.5 text-sm rounded-md hover:bg-muted">{locale === "ar" ? "الإشراف" : "Moderation"}</Link>
+            <Link href={`/${locale}/integrations`} className="px-3 py-1.5 text-sm rounded-md hover:bg-muted">{locale === "ar" ? "التكاملات" : "Integrations"}</Link>
+          </nav>
         </header>
         {!stats ? (
           <Card>

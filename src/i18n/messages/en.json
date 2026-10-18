@@ -51,13 +51,14 @@
     "principleEvidence": "Evidence before claims",
     "principleEvidenceDesc": "Real browser tests are the acceptance bar — unit tests alone are not enough.",
     "statusTitle": "Platform status",
-    "statusG01": "Current mission: G01 — Foundation and Architecture Fitness",
-    "statusNote": "This is a foundation page. Auth, Google sign-in, and integrations are not yet active."
+    "statusG01": "7 of 10 missions complete — Platform in active development",
+    "statusNote": "Syrian Tech Renaissance — an institutional platform for talent and project building"
   },
   "footer": {
     "rights": "© 2026 Syrian Tech Renaissance. All rights reserved.",
     "builtWith": "Built on Next.js, TypeScript, and PostgreSQL",
-    "localeSwitch": "العربية"
+    "localeSwitch": "العربية",
+    "copyright": "© 2026 Syrian Tech Renaissance. All rights reserved."
   },
   "errors": {
     "notFoundTitle": "Page not found",

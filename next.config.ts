@@ -10,6 +10,7 @@ const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIE
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  devIndicators: false,
   poweredByHeader: false,
   // Native modules (Argon2) must stay external — they use Rust binaries
   // that Turbopack can't bundle for the server runtime.

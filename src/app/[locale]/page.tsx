@@ -160,7 +160,8 @@ export default async function HomePage({
             <h2 className="text-xl font-semibold mb-2">{t("statusTitle")}</h2>
             <p className="text-sm text-muted-foreground">{t("statusNote")}</p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Badge variant="outline">G01 · Foundation</Badge>
+              <Badge variant="default">G01-G07 ✅</Badge>
+              <Badge variant="secondary">G08 · UI/UX</Badge>
               <Badge variant="outline">Next.js 16</Badge>
               <Badge variant="outline">PostgreSQL</Badge>
               <Badge variant="outline">RTL · LTR</Badge>

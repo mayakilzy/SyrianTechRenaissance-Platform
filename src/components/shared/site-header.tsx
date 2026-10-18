@@ -29,7 +29,7 @@ export function SiteHeader() {
 
   return (
     <header
-      className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur"
+      className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur overflow-x-hidden"
       role="banner"
     >
       <div className="container mx-auto px-4 sm:px-6">
