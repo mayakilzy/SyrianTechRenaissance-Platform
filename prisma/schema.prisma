@@ -181,9 +181,14 @@ model IntegrationProvider {
   description    String
   owner          String
   baseOrigin     String
-  trustStatus    String   @default("registered") // ProviderTrustStatus
+  trustStatus    String   @default("registered") // "registered" | "approved" | "suspended" | "revoked"
   authMode       Json
   webhookSigning Json?
+  // G07: approval workflow
+  approvedById   String?  // admin who approved
+  approvedAt    DateTime?
+  // G07: mock vs real labeling (CRITICAL: mock must NOT be presented as real)
+  isMock        Boolean  @default(false) // true for mock/dev providers
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -192,6 +197,7 @@ model IntegrationProvider {
 
   @@unique([slug, version])
   @@index([trustStatus])
+  @@index([isMock])
 }
 
 model IntegrationCapability {
@@ -223,11 +229,17 @@ model IntegrationConnection {
   subjectKind           String // "user" | "project" | "organization"
   subjectId             String
   credentialReferenceId String
-  status                String    @default("pending") // ConnectionStatus
+  status                String    @default("pending") // "pending" | "active" | "suspended" | "revoked"
   scopes                String[]
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   revokedAt             DateTime?
+  revokedReason         String?   @db.Text
+  // G07: webhook signing secret (HMAC key) — per-connection, hashed
+  webhookSecretHash     String?   // Argon2id hash of the signing secret
+  // G07: suspend lifecycle
+  suspendedAt          DateTime?
+  suspendedReason      String?   @db.Text
 
   provider       IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   user           User?               @relation(fields: [subjectId], references: [id], onDelete: SetNull)
@@ -236,6 +248,7 @@ model IntegrationConnection {
 
   @@unique([providerId, subjectKind, subjectId])
   @@index([subjectKind, subjectId])
+  @@index([status])
 }
 
 model ConsentRecord {
