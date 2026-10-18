@@ -72,7 +72,14 @@ export function SiteHeader() {
             {/* Locale switcher */}
             <div className="flex items-center gap-1" role="group" aria-label={t("language")}>
               <Link
-                href={pathname?.replace(/^\/(en|ar)/, "/ar") || "/ar"}
+                href={(() => {
+                  // Switch to default locale (ar) — strip /en prefix if present
+                  if (!pathname) return "/";
+                  if (pathname === "/en" || pathname === "/en/") return "/";
+                  if (pathname.startsWith("/en/")) return pathname.slice(3);
+                  // Already default-locale URL — no change
+                  return pathname;
+                })()}
                 className={`px-2 py-1 text-xs rounded ${locale === "ar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 aria-current={locale === "ar" ? "page" : undefined}
                 aria-label="العربية"
@@ -81,7 +88,13 @@ export function SiteHeader() {
                 ع
               </Link>
               <Link
-                href={pathname?.replace(/^\/(en|ar)/, "/en") || "/en"}
+                href={(() => {
+                  // Switch to non-default locale (en) — prepend /en prefix
+                  if (!pathname) return "/en";
+                  if (pathname === "/") return "/en";
+                  if (pathname.startsWith("/en")) return pathname;
+                  return `/en${pathname}`;
+                })()}
                 className={`px-2 py-1 text-xs rounded ${locale === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 aria-current={locale === "en" ? "page" : undefined}
                 aria-label="English"
