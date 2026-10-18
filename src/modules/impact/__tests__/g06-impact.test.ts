@@ -86,7 +86,7 @@ async function setupProject(suffix = "0") {
 describe("G06-B — Impact records (append-only)", () => {
   it("lead can record an impact metric", async () => {
     run = startTestRun();
-    const { projectId, leadId } = await setupProject();
+    const { projectId, leadId } = await setupProject(Math.random().toString(36).slice(2,6));
     const record = await recordImpact(projectId, leadId, {
       metricName: "contributions_accepted",
       metricValue: 5,
@@ -98,7 +98,7 @@ describe("G06-B — Impact records (append-only)", () => {
 
   it("correction via supersedesId (append-only, no silent edit)", async () => {
     run = startTestRun();
-    const { projectId, leadId } = await setupProject();
+    const { projectId, leadId } = await setupProject(Math.random().toString(36).slice(2,6));
     const original = await recordImpact(projectId, leadId, {
       metricName: "contributions_accepted",
       metricValue: 5,
@@ -118,8 +118,8 @@ describe("G06-B — Impact records (append-only)", () => {
 
   it("non-participant cannot list impact records (test EXISTING project)", async () => {
     run = startTestRun();
-    const projectA = await setupProject();
-    const projectB = await setupProject();
+    const projectA = await setupProject(Math.random().toString(36).slice(2,6));
+    const projectB = await setupProject(Math.random().toString(36).slice(2,6));
     // lead of project B tries to see project A's impact records — NotFound
     await expect(listImpactRecords(projectA.projectId, projectB.leadId)).rejects.toThrow(NotFoundError);
     await expect(
