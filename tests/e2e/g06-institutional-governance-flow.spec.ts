@@ -267,7 +267,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       // Create two orgs + two reps
       const orgARes = await apiCall(adminPage, "POST", "/api/organizations", {
         legalName: "Test Org Alpha",
-        displayName: `Org A ${PREFIX}`,
+        displayName: "Org A",
         email: `g06-iso-a-${PREFIX}@str-test.local`,
       });
       const orgAId = orgARes.data?.organization?.id;
@@ -275,7 +275,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
 
       const orgBRes = await apiCall(adminPage, "POST", "/api/organizations", {
         legalName: "Test Org Beta",
-        displayName: `Org B ${PREFIX}`,
+        displayName: "Org B",
         email: `g06-iso-b-${PREFIX}@str-test.local`,
       });
       const orgBId = orgBRes.data?.organization?.id;
