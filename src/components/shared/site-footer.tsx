@@ -14,14 +14,23 @@ export function SiteFooter() {
           <p className="text-sm text-muted-foreground">
             {tf("copyright") || "© 2026 Syrian Tech Renaissance"}
           </p>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/30" aria-hidden="true" />
-              {t("academy")} — <span className="text-xs">{t("academyNote")}</span>
+          {/* On mobile: stack Academy + Engineering vertically so each gets
+              the full content width and text wraps cleanly. On desktop
+              (sm+): horizontal row as before. */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground w-full sm:w-auto">
+            <span className="flex items-start gap-1.5">
+              <span className="inline-block w-2 h-2 mt-1.5 rounded-full bg-muted-foreground/30 shrink-0" aria-hidden="true" />
+              <span className="flex flex-col">
+                <span>{t("academy")}</span>
+                <span className="text-xs">{t("academyNote")}</span>
+              </span>
             </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/30" aria-hidden="true" />
-              {t("engineering")} — <span className="text-xs">{t("engineeringNote")}</span>
+            <span className="flex items-start gap-1.5">
+              <span className="inline-block w-2 h-2 mt-1.5 rounded-full bg-muted-foreground/30 shrink-0" aria-hidden="true" />
+              <span className="flex flex-col">
+                <span>{t("engineering")}</span>
+                <span className="text-xs">{t("engineeringNote")}</span>
+              </span>
             </span>
           </div>
         </div>

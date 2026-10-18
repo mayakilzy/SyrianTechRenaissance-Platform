@@ -558,5 +558,93 @@ test.describe("G08 — Visual + Accessibility", () => {
     });
     expect(hasHorizontalScroll).toBe(false);
   });
+
+  // =====================================================================
+  // G08 FINAL VISUAL REVIEW — Footer overlap detection
+  // Per ChatGPT directive: "Add a test that prevents cut or overlap of
+  // elements, not just page-width overflow." Strict overflow test alone
+  // is insufficient — elements can be technically within viewport width
+  // but still visually overlap when squeezed into a narrow flex row.
+  // =====================================================================
+  test("footer — Academy and Engineering spans do not overlap on EN mobile", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/en");
+    await page.waitForLoadState("networkidle");
+    // Find the two footer "coming soon" item spans (the ones with the bullet dot)
+    const bulletSpans = page.locator("footer span.inline-block.w-2.h-2");
+    const count = await bulletSpans.count();
+    expect(count).toBeGreaterThanOrEqual(2);
+    // Get the parent <span> elements (each bullet is wrapped in a span with the
+    // academy/engineering text). We check the bullet's parent's bounding box.
+    const boxes = await page.evaluate(() => {
+      const bullets = Array.from(document.querySelectorAll("footer span.inline-block.w-2.h-2"));
+      return bullets.map((b) => {
+        const parent = b.parentElement;
+        if (!parent) return null;
+        const r = parent.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, text: parent.textContent?.trim().slice(0, 50) };
+      }).filter(Boolean);
+    });
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    // Assert the two footer item spans do NOT overlap (one is fully above or
+    // fully beside the other; never mid-overlap).
+    const a = boxes[0];
+    const b = boxes[1];
+    const verticalOverlap = a.top < b.bottom && b.top < a.bottom;
+    const horizontalOverlap = a.left < b.right && b.left < a.right;
+    const overlap = verticalOverlap && horizontalOverlap;
+    expect(overlap).toBe(false);
+    // Also assert each item is within the viewport horizontally (no clipping)
+    expect(a.left).toBeGreaterThanOrEqual(0);
+    expect(a.right).toBeLessThanOrEqual(375);
+    expect(b.left).toBeGreaterThanOrEqual(0);
+    expect(b.right).toBeLessThanOrEqual(375);
+  });
+
+  test("footer — Academy and Engineering spans do not overlap on AR mobile", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/ar");
+    await page.waitForLoadState("networkidle");
+    const boxes = await page.evaluate(() => {
+      const bullets = Array.from(document.querySelectorAll("footer span.inline-block.w-2.h-2"));
+      return bullets.map((b) => {
+        const parent = b.parentElement;
+        if (!parent) return null;
+        const r = parent.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      }).filter(Boolean);
+    });
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    const a = boxes[0];
+    const b = boxes[1];
+    const overlap = (a.top < b.bottom && b.top < a.bottom) && (a.left < b.right && b.left < a.right);
+    expect(overlap).toBe(false);
+  });
+
+  test("footer — Academy and Engineering spans do not overlap on EN desktop", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await page.goto("/en");
+    await page.waitForLoadState("networkidle");
+    const boxes = await page.evaluate(() => {
+      const bullets = Array.from(document.querySelectorAll("footer span.inline-block.w-2.h-2"));
+      return bullets.map((b) => {
+        const parent = b.parentElement;
+        if (!parent) return null;
+        const r = parent.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      }).filter(Boolean);
+    });
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    const a = boxes[0];
+    const b = boxes[1];
+    const overlap = (a.top < b.bottom && b.top < a.bottom) && (a.left < b.right && b.left < a.right);
+    expect(overlap).toBe(false);
+  });
 });
 

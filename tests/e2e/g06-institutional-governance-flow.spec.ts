@@ -101,8 +101,8 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       await signin(adminPage, ADMIN_EMAIL, ADMIN_PASSWORD);
       const adminId = await getUserId(adminPage);
       const orgRes = await apiCall(adminPage, "POST", "/api/organizations", {
-        legalName: `E2E Test Org ${PREFIX}`,
-        displayName: `Test Org ${PREFIX}`,
+        legalName: "E2E Test Org",
+        displayName: "Test Org",
         email: `g06-org-${PREFIX}@str-test.local`,
       });
       expect(orgRes.ok, `Org registration failed: ${orgRes.error?.message}`).toBe(true);
@@ -266,7 +266,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
 
       // Create two orgs + two reps
       const orgARes = await apiCall(adminPage, "POST", "/api/organizations", {
-        legalName: `Test Org Alpha ${PREFIX}`,
+        legalName: "Test Org Alpha",
         displayName: `Org A ${PREFIX}`,
         email: `g06-iso-a-${PREFIX}@str-test.local`,
       });
@@ -274,7 +274,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       await apiCall(adminPage, "POST", `/api/organizations/${orgAId}/verify`, {});
 
       const orgBRes = await apiCall(adminPage, "POST", "/api/organizations", {
-        legalName: `Test Org Beta ${PREFIX}`,
+        legalName: "Test Org Beta",
         displayName: `Org B ${PREFIX}`,
         email: `g06-iso-b-${PREFIX}@str-test.local`,
       });
