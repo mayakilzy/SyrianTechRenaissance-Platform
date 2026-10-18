@@ -64,8 +64,8 @@ export async function processNextOutboxEvent(): Promise<boolean> {
   });
   if (!job) {
     // Mark the outbox event as dispatched (job doesn't exist — nothing to do)
-    await db.outboxEvent.update({
-      where: { id: outboxEvent.id },
+    await db.outboxEvent.updateMany({
+      where: { id: outboxEvent.id, dispatchedAt: null },
       data: { dispatchedAt: new Date() },
     });
     logger.warn("outbox.job.not_found", { jobId });
@@ -75,8 +75,8 @@ export async function processNextOutboxEvent(): Promise<boolean> {
   // Step 4: Skip if job was cancelled/timed_out while waiting
   if (job.status !== "queued") {
     // Mark the outbox event as dispatched (job already handled)
-    await db.outboxEvent.update({
-      where: { id: outboxEvent.id },
+    await db.outboxEvent.updateMany({
+      where: { id: outboxEvent.id, dispatchedAt: null },
       data: { dispatchedAt: new Date() },
     });
     logger.info("outbox.job.skipped", { jobId, status: job.status });
@@ -96,8 +96,8 @@ export async function processNextOutboxEvent(): Promise<boolean> {
   });
   if (claimedJob.count === 0) {
     // Another worker claimed it or it was cancelled — mark outbox as dispatched
-    await db.outboxEvent.update({
-      where: { id: outboxEvent.id },
+    await db.outboxEvent.updateMany({
+      where: { id: outboxEvent.id, dispatchedAt: null },
       data: { dispatchedAt: new Date() },
     });
     return true;
