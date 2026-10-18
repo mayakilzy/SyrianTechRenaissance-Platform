@@ -65,7 +65,7 @@ export function CharterEditor({ proposalId, initialRevision, locale, status }: P
     setSaving(true);
     try {
       const skills = skillsInput.split(",").map(s => s.trim()).filter(Boolean);
-      const res = await fetch(`/api/proposals/${proposalId}/charter`, {
+      const res = await fetch(`/api/proposals/${proposalId}/revise`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, requiredSkills: skills }),
