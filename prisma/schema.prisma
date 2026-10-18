@@ -71,6 +71,25 @@ model User {
   contributionsAccepted   ContributionReference[]  @relation("ContributionAccepter")
   filesUploaded           FileEvidence[]           @relation("FileUploader")
 
+  // G06-A relations — Organizations, Partnerships, Rights Declarations
+  organizationsVerified        Organization[]                @relation("OrgVerifier")
+  orgRepresentativeRoles       OrganizationRepresentative[]  @relation("OrgRepresentative")
+  repVerifierFor               OrganizationRepresentative[]  @relation("RepVerifier")
+  partnershipRequestsInitiated PartnershipRequest[]         @relation("PartnershipRequester")
+  partnershipDecisionsMade     PartnershipDecision[]         @relation("PartnershipDecider")
+  agreementsUploaded           AgreementReference[]          @relation("AgreementUploader")
+  rightsDeclared               ContributionRightsDeclaration[] @relation("RightsDeclarer")
+  rightsReviewed               ContributionRightsDeclaration[] @relation("RightsReviewer")
+
+  // G06-B relations — Threads, Moderation, Impact
+  threadsCreated              ProjectThread[]           @relation("ThreadCreator")
+  threadMessagesAuthored      ThreadMessage[]           @relation("ThreadMessageAuthor")
+  moderationComplaintsFiled   ModerationComplaint[]      @relation("ModerationComplainant")
+  moderationComplaintsTargeted ModerationComplaint[]     @relation("ModerationTarget")
+  moderationDecisionsMade     ModerationDecision[]       @relation("ModerationDecider")
+  impactRecordsRecorded       ImpactRecord[]            @relation("ImpactRecorder")
+
+
   @@index([email])
 }
 
@@ -567,6 +586,15 @@ model Project {
   contributions  ContributionReference[]
   fileEvidence   FileEvidence[]
 
+  // G06-A relations
+  partnershipRequests PartnershipRequest[]
+
+  // G06-B relations
+  threads             ProjectThread[]
+  moderationComplaints ModerationComplaint[]
+  impactRecords       ImpactRecord[]
+
+
   @@index([leadId])
   @@index([stewardId])
   @@index([status])
@@ -919,6 +947,348 @@ enum FileScanStatus {
   CLEAN // scanned, no threats found — can be referenced and read
   INFECTED // scanner found a threat — must NOT be read or accepted
   SCAN_FAILED // scanner error — treated like PENDING (fail-closed)
+}
+
+// ============================================================
+// G06-A — Organizations, Partnerships, and Contribution Rights
+// ============================================================
+// Architectural constraints (per MASTER G06 Authorization):
+//   1. NO automated legally-binding contract generation.
+//   2. NO automated IP transfer. Rights declarations are claims requiring
+//      context + evidence, NOT legal facts the system proves.
+//   3. A representative CANNOT verify their own delegated authority —
+//      requires independent authorized party (admin).
+//   4. Agreement files with INFECTED scan status CANNOT be used as evidence;
+//      if discovered after approval, operational reliance is suspended
+//      pending institutional review (historical decision preserved).
+//   5. Service-layer authorization only (UI is not authoritative).
+// ============================================================
+
+// ------------------------------------------------------------
+// Organizations + Representatives (module: organizations)
+// ------------------------------------------------------------
+
+model Organization {
+  id           String             @id @default(cuid())
+  legalName    String             // verified legal name (only admin can set/verify)
+  displayName  String
+  email        String             @unique // primary contact
+  website      String?
+  status       OrganizationStatus @default(PENDING_VERIFICATION)
+  verifiedAt   DateTime?
+  verifiedById String?            // admin who verified (must NOT be self — independent)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  suspendedAt  DateTime?
+  suspendedReason String?         @db.Text
+  revokedAt    DateTime?
+  revokedReason String?           @db.Text
+
+  // Relations
+  representatives      OrganizationRepresentative[]
+  partnershipRequests  PartnershipRequest[] // where this org is the partner
+  agreements           AgreementReference[]
+  verifiedBy           User? @relation("OrgVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([email])
+}
+
+enum OrganizationStatus {
+  PENDING_VERIFICATION // registered, awaiting admin verification
+  ACTIVE // verified, operational
+  SUSPENDED // suspended (operational pause; reversible)
+  REVOKED // permanently revoked (terminal)
+}
+
+model OrganizationRepresentative {
+  // A user authorized to act on behalf of an organization.
+  // delegatedAuthorityScope documents WHAT they can do (evidence-backed).
+  // CANNOT self-verify — requires independent admin verification.
+  id                      String   @id @default(cuid())
+  organizationId          String
+  userId                  String
+  role                    String   // "signatory" | "liaison" | "observer"
+  delegatedAuthorityScope String   @db.Text // evidence-backed scope of authority
+  verifiedAt              DateTime?
+  verifiedById            String?  // admin who verified (must NOT be self)
+  revokedAt               DateTime?
+  revokeReason            String?  @db.Text
+  createdAt               DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("OrgRepresentative", fields: [userId], references: [id], onDelete: Cascade)
+  verifiedBy   User?        @relation("RepVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, userId]) // one representative role per (org, user)
+  @@index([organizationId])
+  @@index([userId])
+  @@index([verifiedAt])
+}
+
+// ------------------------------------------------------------
+// Partnership Requests + Decisions + Agreement References (module: partnerships)
+// ------------------------------------------------------------
+
+model PartnershipRequest {
+  // Partnership request initiated by a verified rep of an organization.
+  // Decisions are atomic (optimistic lock on status).
+  // Agreement references are evidence, NOT legally-binding contracts.
+  id              String              @id @default(cuid())
+  requesterId     String              // user who initiated (must be verified rep of org)
+  organizationId  String              // the partner org
+  projectId       String?             // optional project scope (existing project)
+  proposalText    String              @db.Text // human-readable partnership proposal
+  status          PartnershipStatus   @default(SUBMITTED)
+  submittedAt     DateTime           @default(now())
+  decidedAt       DateTime?
+  // If the agreement evidence is later found to be INFECTED, operational
+  // reliance is suspended pending review (historical decision preserved).
+  agreementSuspendedAt DateTime?
+  agreementSuspendReason String?     @db.Text
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requester    User                 @relation("PartnershipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  project      Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  decisions    PartnershipDecision[]
+  agreement    AgreementReference?
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([requesterId])
+}
+
+enum PartnershipStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model PartnershipDecision {
+  // Audit trail of partnership decisions. One row per decision.
+  // Anti-self-decision: decider cannot be the requester (conflict of interest).
+  id                   String                  @id @default(cuid())
+  partnershipRequestId String
+  deciderId            String                  // partnership_manager or admin (NOT the requester)
+  action               PartnershipDecisionAction
+  reason               String                  @db.Text
+  decidedAt            DateTime                @default(now())
+
+  partnershipRequest PartnershipRequest @relation(fields: [partnershipRequestId], references: [id], onDelete: Cascade)
+  decider            User                @relation("PartnershipDecider", fields: [deciderId], references: [id], onDelete: Cascade)
+
+  @@index([partnershipRequestId])
+  @@index([deciderId])
+}
+
+enum PartnershipDecisionAction {
+  APPROVE
+  REJECT
+  REQUEST_REVISION
+}
+
+model AgreementReference {
+  // Evidence of a signed agreement — NOT a system-generated legal contract.
+  // scanStatus enforces fail-closed: INFECTED files cannot be used as evidence.
+  // No real download URL is issued unless scanStatus === CLEAN (G07 will add real scanner).
+  id                   String   @id @default(cuid())
+  partnershipRequestId String   @unique // one agreement per partnership
+  storageKey           String   // opaque key in safe object storage
+  fileName             String
+  mimeType             String
+  sizeBytes            Int
+  scanStatus           FileScanStatus @default(PENDING)
+  scannedAt            DateTime?
+  scanError            String?  @db.Text
+  uploadedById         String
+  uploadedAt           DateTime @default(now())
+
+  partnershipRequest PartnershipRequest @relation(fields: [partnershipRequestId], references: [id], onDelete: Cascade)
+  uploadedBy         User                 @relation("AgreementUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([scanStatus])
+}
+
+// ------------------------------------------------------------
+// Contribution Rights Declarations (module: partnerships)
+// Extends G05's ContributionReference with optional rights declarations.
+// ------------------------------------------------------------
+
+model ContributionRightsDeclaration {
+  // Records a rights declaration attached to an accepted contribution.
+  // Does NOT auto-transfer IP — the declaration is evidence of what the
+  // contributor declared, NOT what was transferred.
+  // Optional: a contribution can exist without a rights declaration.
+  // declarationType semantics:
+  //   - LICENSE_GRANTED: license to use (NOT ownership transfer)
+  //   - ATTRIBUTION_ONLY: explicit no-transfer, attribution only
+  //   - WORK_FOR_HIRE: contributor declares work-for-hire status (claim, NOT proof)
+  //   - OTHER: see declarationText for details
+  id              String                 @id @default(cuid())
+  contributionId  String                 @unique // one declaration per contribution
+  declaredById    String                 // the contributor (or their verified rep)
+  declarationType RightsDeclarationType
+  declarationText String                 @db.Text // human-readable declaration
+  evidenceStorageKey String?             // optional scanned signed evidence (e.g., signed PDF)
+  evidenceScanStatus FileScanStatus?     // null if no evidence file
+  evidenceScannedAt  DateTime?
+  declaredAt      DateTime               @default(now())
+  reviewedAt      DateTime?              // optional admin review
+  reviewedById    String?
+
+  contribution ContributionReference @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+  declaredBy  User                   @relation("RightsDeclarer", fields: [declaredById], references: [id], onDelete: Cascade)
+  reviewedBy  User?                  @relation("RightsReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([contributionId])
+  @@index([declaredById])
+  @@index([declarationType])
+}
+
+enum RightsDeclarationType {
+  LICENSE_GRANTED
+  ATTRIBUTION_ONLY
+  WORK_FOR_HIRE
+  OTHER
+}
+
+// ============================================================
+// G06-B — Threads, Moderation, Admin, and Impact
+// ============================================================
+// Architectural constraints (per MASTER G06 Authorization):
+//   1. NO deletion of original records or evidence on moderation decisions
+//      (CONTENT_REMOVED removes visibility, not the row; original preserved).
+//   2. USER_SUSPENDED requires admin approval (NOT moderator alone); atomic
+//      with audit event. No self-suspension.
+//   3. Threads are project-scoped (no global forum); close action is terminal.
+//   4. Impact records are append-only; corrections via new linked record.
+//   5. Service-layer authorization only (UI is not authoritative).
+// ============================================================
+
+// ------------------------------------------------------------
+// Project-Scoped Threads (module: communications)
+// ------------------------------------------------------------
+
+model ProjectThread {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  topic       String?  // e.g., "charter-revision", "milestone-blocker", "rights-clarification"
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator   User    @relation("ThreadCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  messages  ThreadMessage[]
+
+  @@index([projectId])
+  @@index([updatedAt])
+}
+
+model ThreadMessage {
+  id          String   @id @default(cuid())
+  threadId    String
+  authorId    String
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+  editedAt    DateTime?
+
+  thread  ProjectThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author  User           @relation("ThreadMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([authorId])
+}
+
+// ------------------------------------------------------------
+// Moderation (module: moderation)
+// ------------------------------------------------------------
+
+model ModerationComplaint {
+  id            String   @id @default(cuid())
+  complainantId String
+  projectId     String?  // optional project scope
+  threadId      String?  // optional thread scope
+  targetUserId  String?  // optional user scope
+  reason        String   @db.Text
+  evidenceText  String?   @db.Text  // quoted content (preserves original even if message later removed)
+  status        ModerationStatus @default(SUBMITTED)
+  submittedAt   DateTime @default(now())
+  decidedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  complainant User             @relation("ModerationComplainant", fields: [complainantId], references: [id], onDelete: Cascade)
+  project     Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  thread      ProjectThread?   @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  targetUser  User?            @relation("ModerationTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  decisions   ModerationDecision[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([targetUserId])
+}
+
+enum ModerationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  RESOLVED_WARNING
+  RESOLVED_REMOVED
+  RESOLVED_DISMISSED
+  ESCALATED
+}
+
+model ModerationDecision {
+  id          String   @id @default(cuid())
+  complaintId String
+  deciderId   String
+  action      ModerationAction
+  reason      String   @db.Text
+  decidedAt   DateTime @default(now())
+
+  complaint ModerationComplaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  decider   User                 @relation("ModerationDecider", fields: [deciderId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+  @@index([deciderId])
+}
+
+enum ModerationAction {
+  WARNING
+  CONTENT_REMOVED
+  USER_SUSPENDED
+  DISMISS
+  ESCALATE
+}
+
+// ------------------------------------------------------------
+// Impact Records (module: impact) — append-only
+// ------------------------------------------------------------
+
+model ImpactRecord {
+  id            String   @id @default(cuid())
+  projectId     String
+  metricName    String
+  metricValue   Int
+  evidenceUrl   String?  // optional URL to evidence (dashboard, screenshot)
+  recordedById  String
+  recordedAt    DateTime @default(now())
+  supersedesId  String?  // if this record corrects a previous one
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("ImpactRecorder", fields: [recordedById], references: [id], onDelete: Cascade)
+  supersedes ImpactRecord? @relation("ImpactSupersession", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy ImpactRecord[] @relation("ImpactSupersession")
+
+  @@index([projectId])
+  @@index([metricName])
 }
 
 // ============================================================

@@ -227,5 +227,82 @@
     "noApplications": "لا توجد طلبات بعد.",
     "backToOpportunity": "العودة إلى الفرصة",
     "decisionReason": "سبب القرار"
+  },
+  "organizations": {
+    "title": "المنظمات الشريكة",
+    "legalName": "الاسم القانوني",
+    "displayName": "الاسم المعروض",
+    "email": "البريد الإلكتروني",
+    "website": "الموقع الإلكتروني",
+    "status": "الحالة",
+    "verified": "موثَّق",
+    "unverified": "غير موثَّق",
+    "representatives": "الممثلون",
+    "verify": "توثيق",
+    "suspend": "تعليق",
+    "reactivate": "إعادة تفعيل",
+    "revoke": "إلغاء"
+  },
+  "partnerships": {
+    "title": "طلبات الشراكة",
+    "proposalText": "نص الطلب",
+    "status": "الحالة",
+    "approve": "قبول",
+    "reject": "رفض",
+    "requestRevision": "طلب تعديل",
+    "withdraw": "انسحاب",
+    "agreement": "الاتفاقية",
+    "decisions": "القرارات",
+    "requester": "الطالب",
+    "organization": "المنظمة"
+  },
+  "rights": {
+    "title": "تصريحات الحقوق",
+    "declarationType": "نوع التصريح",
+    "licenseGranted": "ترخيص ممنوح",
+    "attributionOnly": "إسناد فقط",
+    "workForHire": "عمل بأجر",
+    "other": "أخرى",
+    "declarationText": "نص التصريح",
+    "disclaimer": "هذا تصريح وليس نقل ملكية فكرية"
+  },
+  "moderation": {
+    "title": "الإشراف",
+    "complaint": "شكوى",
+    "complaints": "الشكاوى",
+    "reason": "السبب",
+    "evidenceText": "الأدلة المقتبَسة",
+    "decisions": "القرارات",
+    "warning": "تحذير",
+    "contentRemoved": "محتوى محذوف",
+    "userSuspended": "مستخدم معلَّق",
+    "dismiss": "رفض",
+    "escalate": "تصعيد",
+    "status": "الحالة"
+  },
+  "admin": {
+    "dashboard": "لوحة الإدارة",
+    "proposals": "المقترحات",
+    "projects": "المشاريع",
+    "organizations": "المنظمات",
+    "partnerships": "الشراكات",
+    "moderation": "الإشراف",
+    "audit": "سجل التدقيق",
+    "suspensions": "التعليقات"
+  },
+  "threads": {
+    "title": "المحادثات",
+    "thread": "محادثة",
+    "messages": "الرسائل",
+    "createThread": "إنشاء محادثة",
+    "postMessage": "نشر رسالة",
+    "close": "إغلاق"
+  },
+  "impact": {
+    "title": "سجلات الأثر",
+    "metric": "المؤشر",
+    "value": "القيمة",
+    "evidenceUrl": "رابط الدليل",
+    "record": "تسجيل"
   }
 }

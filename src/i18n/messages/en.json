@@ -227,5 +227,82 @@
     "noApplications": "No applications yet.",
     "backToOpportunity": "Back to opportunity",
     "decisionReason": "Decision reason"
+  },
+  "organizations": {
+    "title": "Partner Organizations",
+    "legalName": "Legal name",
+    "displayName": "Display name",
+    "email": "Email",
+    "website": "Website",
+    "status": "Status",
+    "verified": "Verified",
+    "unverified": "Unverified",
+    "representatives": "Representatives",
+    "verify": "Verify",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "revoke": "Revoke"
+  },
+  "partnerships": {
+    "title": "Partnership Requests",
+    "proposalText": "Proposal text",
+    "status": "Status",
+    "approve": "Approve",
+    "reject": "Reject",
+    "requestRevision": "Request revision",
+    "withdraw": "Withdraw",
+    "agreement": "Agreement",
+    "decisions": "Decisions",
+    "requester": "Requester",
+    "organization": "Organization"
+  },
+  "rights": {
+    "title": "Rights Declarations",
+    "declarationType": "Declaration type",
+    "licenseGranted": "License granted",
+    "attributionOnly": "Attribution only",
+    "workForHire": "Work for hire",
+    "other": "Other",
+    "declarationText": "Declaration text",
+    "disclaimer": "This is a declaration, not an IP transfer"
+  },
+  "moderation": {
+    "title": "Moderation",
+    "complaint": "Complaint",
+    "complaints": "Complaints",
+    "reason": "Reason",
+    "evidenceText": "Quoted evidence",
+    "decisions": "Decisions",
+    "warning": "Warning",
+    "contentRemoved": "Content removed",
+    "userSuspended": "User suspended",
+    "dismiss": "Dismiss",
+    "escalate": "Escalate",
+    "status": "Status"
+  },
+  "admin": {
+    "dashboard": "Admin Dashboard",
+    "proposals": "Proposals",
+    "projects": "Projects",
+    "organizations": "Organizations",
+    "partnerships": "Partnerships",
+    "moderation": "Moderation",
+    "audit": "Audit log",
+    "suspensions": "Suspensions"
+  },
+  "threads": {
+    "title": "Threads",
+    "thread": "Thread",
+    "messages": "Messages",
+    "createThread": "Create thread",
+    "postMessage": "Post message",
+    "close": "Close"
+  },
+  "impact": {
+    "title": "Impact Records",
+    "metric": "Metric",
+    "value": "Value",
+    "evidenceUrl": "Evidence URL",
+    "record": "Record"
   }
 }

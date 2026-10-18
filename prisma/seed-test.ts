@@ -152,7 +152,138 @@ async function main() {
     },
   });
 
-  console.log("✓ STR test seed: complete (reviewer + steward + member with passwords)");
+  // G06 — Institutional roles: admin, partnership_manager, moderator
+  const adminHash = await hashPassword("AdminPass123!");
+  await prisma.user.upsert({
+    where: { email: "admin@str.platform.local" },
+    update: {
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      authIdentities: {
+        upsert: {
+          where: { provider_providerSub: { provider: "password", providerSub: "admin@str.platform.local" } },
+          update: { passwordHash: adminHash },
+          create: {
+            provider: "password",
+            providerSub: "admin@str.platform.local",
+            emailAtLink: "admin@str.platform.local",
+            passwordHash: adminHash,
+          },
+        },
+      },
+    },
+    create: {
+      email: "admin@str.platform.local",
+      displayName: "STR Admin (test)",
+      locale: "ar",
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      roleGrants: {
+        create: [
+          { role: "member", scope: "global" },
+          { role: "reviewer", scope: "global" },
+          { role: "admin", scope: "global" },
+        ],
+      },
+      authIdentities: {
+        create: {
+          provider: "password",
+          providerSub: "admin@str.platform.local",
+          emailAtLink: "admin@str.platform.local",
+          passwordHash: adminHash,
+        },
+      },
+      profile: { create: { displayName: "STR Admin", visibility: { create: {} } } },
+    },
+  });
+
+  const pmHash = await hashPassword("PartnershipManagerPass123!");
+  await prisma.user.upsert({
+    where: { email: "partnership_manager@str.platform.local" },
+    update: {
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      authIdentities: {
+        upsert: {
+          where: { provider_providerSub: { provider: "password", providerSub: "partnership_manager@str.platform.local" } },
+          update: { passwordHash: pmHash },
+          create: {
+            provider: "password",
+            providerSub: "partnership_manager@str.platform.local",
+            emailAtLink: "partnership_manager@str.platform.local",
+            passwordHash: pmHash,
+          },
+        },
+      },
+    },
+    create: {
+      email: "partnership_manager@str.platform.local",
+      displayName: "STR Partnership Manager (test)",
+      locale: "ar",
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      roleGrants: {
+        create: [
+          { role: "member", scope: "global" },
+          { role: "partnership_manager", scope: "global" },
+        ],
+      },
+      authIdentities: {
+        create: {
+          provider: "password",
+          providerSub: "partnership_manager@str.platform.local",
+          emailAtLink: "partnership_manager@str.platform.local",
+          passwordHash: pmHash,
+        },
+      },
+      profile: { create: { displayName: "STR PM", visibility: { create: {} } } },
+    },
+  });
+
+  const modHash = await hashPassword("ModeratorPass123!");
+  await prisma.user.upsert({
+    where: { email: "moderator@str.platform.local" },
+    update: {
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      authIdentities: {
+        upsert: {
+          where: { provider_providerSub: { provider: "password", providerSub: "moderator@str.platform.local" } },
+          update: { passwordHash: modHash },
+          create: {
+            provider: "password",
+            providerSub: "moderator@str.platform.local",
+            emailAtLink: "moderator@str.platform.local",
+            passwordHash: modHash,
+          },
+        },
+      },
+    },
+    create: {
+      email: "moderator@str.platform.local",
+      displayName: "STR Moderator (test)",
+      locale: "ar",
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      roleGrants: {
+        create: [
+          { role: "member", scope: "global" },
+          { role: "moderator", scope: "global" },
+        ],
+      },
+      authIdentities: {
+        create: {
+          provider: "password",
+          providerSub: "moderator@str.platform.local",
+          emailAtLink: "moderator@str.platform.local",
+          passwordHash: modHash,
+        },
+      },
+      profile: { create: { displayName: "STR Moderator", visibility: { create: {} } } },
+    },
+  });
+
+  console.log("✓ STR test seed: complete (reviewer + steward + member + admin + partnership_manager + moderator with passwords)");
 }
 
 main()
