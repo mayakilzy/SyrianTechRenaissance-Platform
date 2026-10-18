@@ -143,7 +143,17 @@ export async function postMessage(
   }
   const thread = await db.projectThread.findUnique({
     where: { id: threadId },
-    include: { project: { include: { team: { include: { memberships: { where: { leftAt: null } } } } } } } },
+    include: {
+      project: {
+        include: {
+          team: {
+            include: {
+              memberships: { where: { leftAt: null } },
+            },
+          },
+        },
+      },
+    },
   });
   if (!thread) throw new NotFoundError("Thread not found");
   if (thread.closedAt) {
@@ -195,7 +205,17 @@ export async function postMessage(
 export async function closeThread(threadId: string, actorId: string) {
   const thread = await db.projectThread.findUnique({
     where: { id: threadId },
-    include: { project: { include: { team: { include: { memberships: { where: { leftAt: null } } } } } } } },
+    include: {
+      project: {
+        include: {
+          team: {
+            include: {
+              memberships: { where: { leftAt: null } },
+            },
+          },
+        },
+      },
+    },
   });
   if (!thread) throw new NotFoundError("Thread not found");
   // Authorization: lead, steward, admin, or thread creator
