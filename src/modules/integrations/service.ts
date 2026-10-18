@@ -155,7 +155,7 @@ export async function createConnection(creatorId: string, input: ConnectionCreat
   const webhookSecret = randomBytes(32).toString("hex");
   const webhookSecretHash = createHash("sha256").update(webhookSecret).digest("hex");
 
-  // Create the connection
+  // Create the connection (stores the actual secret for mock/dev; production would use key manager)
   const connection = await db.integrationConnection.create({
     data: {
       providerId: valid.data.providerId,
@@ -163,7 +163,8 @@ export async function createConnection(creatorId: string, input: ConnectionCreat
       subjectId: valid.data.projectId,
       status: "active",
       scopes: valid.data.scopes,
-      webhookSecretHash,
+      webhookSecret,        // actual HMAC key (mock/dev only — NOT production)
+      webhookSecretHash,     // SHA-256 hash for audit logs
       // credentialReferenceId — for mock, we use a placeholder; real providers need a real credential ref
       credentialReferenceId: `mock-cred-${valid.data.projectId}`,
     },

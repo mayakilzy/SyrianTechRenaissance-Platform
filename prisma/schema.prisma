@@ -234,8 +234,11 @@ model IntegrationConnection {
   updatedAt             DateTime  @updatedAt
   revokedAt             DateTime?
   revokedReason         String?   @db.Text
-  // G07: webhook signing secret (HMAC key) — per-connection, hashed
-  webhookSecretHash     String?   // Argon2id hash of the signing secret
+  // G07: webhook signing secret — per-connection
+  // For mock/dev: stores the actual secret (plaintext, clearly labeled MOCK)
+  // For production (G10): would be replaced with key manager reference
+  webhookSecret         String?   // actual HMAC signing secret (mock/dev only)
+  webhookSecretHash     String?   // SHA-256 hash for audit (never used as HMAC key)
   // G07: suspend lifecycle
   suspendedAt          DateTime?
   suspendedReason      String?   @db.Text
