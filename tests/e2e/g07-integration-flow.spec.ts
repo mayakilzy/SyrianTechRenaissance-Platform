@@ -59,8 +59,8 @@ async function apiCall(page: import("@playwright/test").Page, method: string, ur
 async function signin(page: import("@playwright/test").Page, email: string, password: string) {
   await page.context().clearCookies();
   await page.goto("/auth/signin");
-  await page.fill("[name="email"]", email);
-  await page.fill("[name="password"]", password);
+  await page.fill('[name="email"]', email);
+  await page.fill('[name="password"]', password);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/(dashboard|en\/dashboard)/, { timeout: 30000 }).catch(() => {});
 }

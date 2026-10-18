@@ -219,7 +219,7 @@ export async function checkTimeouts(): Promise<number> {
 
 export async function runWorkerLoop(): Promise<void> {
   logger.info("outbox.worker.start", { workerId: WORKER_ID });
-  // eslint-disable-next-line no-constant-condition
+  
   while (true) {
     try {
       await recoverAbandonedJobs();
