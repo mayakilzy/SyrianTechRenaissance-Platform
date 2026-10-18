@@ -286,18 +286,18 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     // The original body is PRESERVED (not deleted)
     expect(message?.body).toBe("This is the offensive content that should be removed from view.");
 
-    // CRITICAL: regular member sees "[removed]" placeholder, not the original content
-    const memberView = await getThread(thread.id, memberId);
-    const removedMessageInView = memberView.messages.find((m) => m.id === offendingMessage.id);
+    // CRITICAL: regular participant (lead, not admin/moderator) sees "[removed]" placeholder
+    const leadView = await getThread(thread.id, leadId);
+    const removedMessageInView = leadView.messages.find((m) => m.id === offendingMessage.id);
     expect(removedMessageInView?.removedAt).toBeTruthy();
     expect(removedMessageInView?.body).toBe("[removed — content hidden by moderation decision]");
     expect(removedMessageInView?.body).not.toContain("offensive content");
 
-    // CRITICAL: admin/moderator CAN see the original content (for audit)
-    const modView = await getThread(thread.id, modId);
-    const modMessageView = modView.messages.find((m) => m.id === offendingMessage.id);
-    expect(modMessageView?.removedAt).toBeTruthy();
-    expect(modMessageView?.body).toBe("This is the offensive content that should be removed from view.");
+    // CRITICAL: admin CAN see the original content (for audit)
+    const adminView = await getThread(thread.id, adminId);
+    const adminMessageView = adminView.messages.find((m) => m.id === offendingMessage.id);
+    expect(adminMessageView?.removedAt).toBeTruthy();
+    expect(adminMessageView?.body).toBe("This is the offensive content that should be removed from view.");
   });
 });
 
