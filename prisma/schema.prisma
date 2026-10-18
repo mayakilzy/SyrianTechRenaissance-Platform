@@ -903,6 +903,7 @@ model ContributionReference {
 
   deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rightsDeclaration ContributionRightsDeclaration?
   contributor User        @relation("ContributionContributor", fields: [contributorId], references: [id], onDelete: Cascade)
   acceptedBy  User        @relation("ContributionAccepter", fields: [acceptedById], references: [id], onDelete: Cascade)
 
@@ -987,7 +988,6 @@ model Organization {
   // Relations
   representatives      OrganizationRepresentative[]
   partnershipRequests  PartnershipRequest[] // where this org is the partner
-  agreements           AgreementReference[]
   verifiedBy           User? @relation("OrgVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
 
   @@index([status])
