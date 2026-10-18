@@ -70,47 +70,43 @@ async function setupProjectWithAdmin() {
 }
 
 async function setupMockProvider(adminId: string) {
-  // Create or find the mock provider
-  let provider = await db.integrationProvider.findUnique({
-    where: { slug_version: { slug: "str.mock", version: "v1" } },
+  // Use upsert to handle the case where the provider already exists from seed
+  const provider = await db.integrationProvider.upsert({
+    where: { id: "str.mock.v1" },
+    update: {
+      isMock: true,
+    },
+    create: {
+      id: "str.mock.v1",
+      slug: "str.mock",
+      version: "v1",
+      displayName: "STR Mock Provider",
+      description: "Mock provider for testing integrations",
+      owner: "STR Platform",
+      baseOrigin: "https://mock.str.local",
+      trustStatus: "registered",
+      authMode: { type: "none" },
+      isMock: true,
+    },
   });
-  if (!provider) {
-    provider = await db.integrationProvider.create({
-      data: {
-        id: "str.mock.v1",
-        slug: "str.mock",
-        version: "v1",
-        displayName: "STR Mock Provider",
-        description: "Mock provider for testing integrations",
-        owner: "STR Platform",
-        baseOrigin: "https://mock.str.local",
-        trustStatus: "registered",
-        authMode: { type: "none" },
-        isMock: true,
-      },
-    });
-  }
-  // Ensure the capability exists
-  let cap = await db.integrationCapability.findUnique({
+  // Ensure the capability exists (upsert)
+  await db.integrationCapability.upsert({
     where: { providerId_code: { providerId: provider.id, code: "application.test" } },
+    update: {},
+    create: {
+      providerId: provider.id,
+      code: "application.test",
+      summary: "Test capability for mock provider",
+      executionMode: "async",
+      riskClass: "low",
+      requiredScopes: ["test"],
+      inputSchemaRef: "str.mock.v1/application.test#input",
+      outputSchemaRef: "str.mock.v1/application.test#output",
+      idempotent: true,
+      cancelable: true,
+      timeoutMs: 30000,
+    },
   });
-  if (!cap) {
-    cap = await db.integrationCapability.create({
-      data: {
-        providerId: provider.id,
-        code: "application.test",
-        summary: "Test capability for mock provider",
-        executionMode: "async",
-        riskClass: "low",
-        requiredScopes: ["test"],
-        inputSchemaRef: "str.mock.v1/application.test#input",
-        outputSchemaRef: "str.mock.v1/application.test#output",
-        idempotent: true,
-        cancelable: true,
-        timeoutMs: 30000,
-      },
-    });
-  }
   // Approve the provider if not already approved
   if (provider.trustStatus !== "approved") {
     await approveProvider(provider.id, adminId);
