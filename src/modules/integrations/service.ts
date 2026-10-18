@@ -24,6 +24,7 @@ import {
 } from "@/lib/errors";
 import { z } from "zod/v4";
 import { createHash, randomBytes } from "node:crypto";
+import { encryptSecret, assertEncryptedInProduction } from "./secret-crypto";
 import { isAdmin } from "@/modules/organizations/service";
 import { loadProjectContext } from "@/modules/projects/service";
 
@@ -154,8 +155,10 @@ export async function createConnection(creatorId: string, input: ConnectionCreat
   // Generate a per-connection webhook signing secret
   const webhookSecret = randomBytes(32).toString("hex");
   const webhookSecretHash = createHash("sha256").update(webhookSecret).digest("hex");
+  // ENCRYPT the secret before storing (AES-256-GCM) — plaintext is NEVER in the DB
+  const webhookSecretEncrypted = encryptSecret(webhookSecret);
 
-  // Create the connection (stores the actual secret for mock/dev; production would use key manager)
+  // Create the connection — stores the ENCRYPTED secret (not plaintext)
   const connection = await db.integrationConnection.create({
     data: {
       providerId: valid.data.providerId,
@@ -163,9 +166,8 @@ export async function createConnection(creatorId: string, input: ConnectionCreat
       subjectId: valid.data.projectId,
       status: "active",
       scopes: valid.data.scopes,
-      webhookSecret,        // actual HMAC key (mock/dev only — NOT production)
-      webhookSecretHash,     // SHA-256 hash for audit logs
-      // credentialReferenceId — for mock, we use a placeholder; real providers need a real credential ref
+      webhookSecret: webhookSecretEncrypted,  // encrypted form (iv:ciphertext:authTag)
+      webhookSecretHash,                       // SHA-256 hash for audit logs
       credentialReferenceId: `mock-cred-${valid.data.projectId}`,
     },
   });
@@ -273,7 +275,20 @@ export async function listConnections(projectId: string, actorId: string) {
   }
   return db.integrationConnection.findMany({
     where: { subjectKind: "project", subjectId: projectId },
-    include: { provider: { select: { id: true, displayName: true, isMock: true } } },
+    select: {
+      id: true,
+      providerId: true,
+      subjectKind: true,
+      subjectId: true,
+      status: true,
+      scopes: true,
+      createdAt: true,
+      updatedAt: true,
+      revokedAt: true,
+      suspendedAt: true,
+      // CRITICAL: NEVER select webhookSecret or webhookSecretHash (no secret leakage)
+      provider: { select: { id: true, displayName: true, isMock: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }

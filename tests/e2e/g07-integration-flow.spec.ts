@@ -1,26 +1,42 @@
 import { test, expect } from "@playwright/test";
-import { createHmac } from "node:crypto";
+import { spawn, ChildProcess } from "node:child_process";
 
 /**
- * STR G07 — Integration Core E2E Full Flow
+ * STR G07 — Integration Core E2E Full Flow (with STANDALONE WORKER)
  *
- * Per MASTER G07 Core Acceptance Correction:
- * The full acceptance journey must be a REAL browser flow:
- *   Admin approves mock provider → Lead creates connection → submits job →
- *   Worker processes it → Result visible → Lead revokes → New submission rejected
- *
- * Plus negative tests:
- *   - Webhook: valid signature, forged signature, missing signature, duplicate event
- *   - Cross-project isolation
+ * Per MASTER G07 FINAL DURABILITY directive:
+ * - Tests with the actual standalone worker process (not an HTTP endpoint)
+ * - Verifies: admin approve → create connection → submit job →
+ *   STANDALONE WORKER processes it → result visible → revoke → blocked
+ * - Negative tests: webhook spoofing, missing signature, cross-project
  */
 
 const ADMIN_EMAIL = "test-admin@str.platform.local";
 const ADMIN_PASSWORD = "AdminPass123!";
-const MEMBER_EMAIL = "member@str.platform.local";
-const MEMBER_PASSWORD = "MemberPass123!";
-
 const PREFIX = `g07e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const PASSWORD = "TestPassword123!";
+
+let workerProcess: ChildProcess | null = null;
+
+test.beforeAll(async () => {
+  // Start the STANDALONE worker process (actual Node process, not HTTP)
+  workerProcess = spawn("bun", ["run", "src/modules/integrations/outbox-worker.ts"], {
+    cwd: process.cwd(),
+    env: { ...process.env },
+    stdio: "pipe",
+  });
+  workerProcess.stdout?.on("data", (data) => console.log("[worker]", data.toString().trim()));
+  workerProcess.stderr?.on("data", (data) => console.error("[worker err]", data.toString().trim()));
+  // Wait for the worker to start polling
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+});
+
+test.afterAll(async () => {
+  if (workerProcess) {
+    workerProcess.kill("SIGTERM");
+    workerProcess = null;
+  }
+});
 
 interface ApiResult<T = unknown> {
   ok: boolean;
@@ -32,11 +48,7 @@ interface ApiResult<T = unknown> {
 async function apiCall(page: import("@playwright/test").Page, method: string, url: string, body?: unknown): Promise<ApiResult> {
   const { status, json } = await page.evaluate(
     async ({ method, url, body }) => {
-      const res = await fetch(url, {
-        method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      const res = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
       return { status: res.status, json: await res.json().catch(() => null) };
     },
     { method, url, body },
@@ -47,18 +59,10 @@ async function apiCall(page: import("@playwright/test").Page, method: string, ur
 async function signin(page: import("@playwright/test").Page, email: string, password: string) {
   await page.context().clearCookies();
   await page.goto("/auth/signin");
-  await page.fill('[name="email"]', email);
-  await page.fill('[name="password"]', password);
+  await page.fill("[name="email"]", email);
+  await page.fill("[name="password"]", password);
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/(dashboard|en\/dashboard)/, { timeout: 30000 }).catch(() => {});
-}
-
-async function getUserId(page: import("@playwright/test").Page): Promise<string> {
-  return page.evaluate(async () => {
-    const res = await fetch("/api/auth/session");
-    const data = await res.json();
-    return data?.user?.id ?? "";
-  });
 }
 
 async function signupAndVerify(page: import("@playwright/test").Page, email: string, name: string) {
@@ -75,176 +79,110 @@ async function signupAndVerify(page: import("@playwright/test").Page, email: str
   await signin(page, email, PASSWORD);
 }
 
-test.describe("G07 — Integration Core Full E2E", () => {
-  test(
-    "Full flow: admin approve → create connection → submit job → worker executes → result visible → revoke → blocked",
-    async ({ browser }) => {
-      test.setTimeout(300000);
+async function pollJobStatus(page: import("@playwright/test").Page, projectId: string, connectionId: string, jobId: string, timeoutMs = 30000): Promise<{ status: string; result?: unknown }> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const res = await apiCall(page, "GET", `/api/projects/${projectId}/integrations/${connectionId}/jobs?jobId=${jobId}`);
+    const status = res.data?.job?.status;
+    if (status === "succeeded" || status === "failed" || status === "timed_out" || status === "cancelled") {
+      return { status, result: res.data?.job?.result };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(`Job ${jobId} did not complete within ${timeoutMs}ms`);
+}
 
-      const adminCtx = await browser.newContext();
-      const adminPage = await adminCtx.newPage();
-      const leadCtx = await browser.newContext();
-      const leadPage = await leadCtx.newPage();
-
-      // ── Step 1: Admin approves the mock provider ──
-      await signin(adminPage, ADMIN_EMAIL, ADMIN_PASSWORD);
-      const approveRes = await apiCall(adminPage, "POST", "/api/integrations/providers/str.mock.v1/approve", {});
-      // May already be approved
-      if (!approveRes.ok) {
-        const providersRes = await apiCall(adminPage, "GET", "/api/integrations/providers");
-        const mock = providersRes.data?.providers?.find((p: { id: string }) => p.id === "str.mock.v1");
-        expect(mock?.trustStatus).toBe("approved");
-      }
-
-      // ── Step 2: Lead signs up + creates a project via G03 ──
-      await signupAndVerify(leadPage, `${PREFIX}-lead@str-test.local`, "G07 Lead");
-      const leadUserId = await getUserId(leadPage);
-      expect(leadUserId).toBeTruthy();
-
-      const proposalRes = await apiCall(leadPage, "POST", "/api/proposals", {
-        title: `G07 E2E ${PREFIX}`,
-        charter: {
-          problemStatement: "E2E test problem statement with sufficient length for validation purposes.",
-          outcomes: "E2E test outcomes with sufficient length for validation purposes.",
-          scope: "E2E test scope with sufficient length for validation purposes.",
-          requiredSkills: ["TypeScript"],
-          acceptanceCriteria: "E2E test acceptance criteria with sufficient length for validation.",
-        },
-      });
-      expect(proposalRes.ok).toBe(true);
-      const proposalId = proposalRes.data?.proposal?.id;
-      await apiCall(leadPage, "POST", `/api/proposals/${proposalId}/submit`, {});
-
-      await signin(adminPage, ADMIN_EMAIL, ADMIN_PASSWORD);
-      const stewardRes = await apiCall(adminPage, "GET", "/api/auth/session");
-      // Use admin as both reviewer + steward (different from reviewer? G03 requires stewardId !== reviewerId)
-      // Actually admin@str has admin role but steward@str has steward role
-      // Let me sign in as steward to get their ID
-      const stewardCtx = await browser.newContext();
-      const stewardPage = await stewardCtx.newPage();
-      await signin(stewardPage, "steward@str.platform.local", "StewardPass123!");
-      const stewardUserId = await getUserId(stewardPage);
-      expect(stewardUserId).toBeTruthy();
-
-      // Reviewer approves with steward
-      const approveProposalRes = await apiCall(adminPage, "POST", `/api/proposals/${proposalId}/review`, {
-        action: "APPROVE",
-        reason: "Approved for G07 E2E integration test.",
-        stewardId: stewardUserId,
-      });
-      expect(approveProposalRes.ok).toBe(true);
-
-      // Get the project ID
-      const propDetailRes = await apiCall(adminPage, "GET", `/api/proposals/${proposalId}`);
-      const projectId = propDetailRes.data?.proposal?.project?.id;
-      expect(projectId).toBeTruthy();
-
-      // ── Step 3: Lead creates a connection to the mock provider ──
-      await signin(leadPage, `${PREFIX}-lead@str-test.local`, PASSWORD);
-      const connRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations`, {
-        providerId: "str.mock.v1",
-        scopes: ["test"],
-      });
-      expect(connRes.ok, `Connection creation failed: ${connRes.error?.message}`).toBe(true);
-      const connectionId = connRes.data?.connection?.id;
-      expect(connectionId).toBeTruthy();
-
-      // ── Step 4: Lead submits an integration job ──
-      const jobRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations/${connectionId}/jobs`, {
-        capability: "application.test",
-        idempotencyKey: `g07-e2e-${PREFIX}`,
-        payload: { input: "integration test data" },
-      });
-      expect(jobRes.ok, `Job submission failed: ${jobRes.error?.message}`).toBe(true);
-      const jobId = jobRes.data?.job?.id;
-      expect(jobId).toBeTruthy();
-
-      // ── Step 5: Trigger the worker to process the job ──
-      // Use the test-only endpoint to run one worker cycle
-      const workerRes = await apiCall(leadPage, "POST", "/api/integrations/process-next", {});
-      expect(workerRes.ok).toBe(true);
-      expect(workerRes.data?.processed).toBe(true);
-
-      // ── Step 6: Verify the job result is visible ──
-      const jobStatusRes = await apiCall(leadPage, "GET", `/api/projects/${projectId}/integrations/${connectionId}/jobs?jobId=${jobId}`);
-      expect(jobStatusRes.ok).toBe(true);
-      expect(jobStatusRes.data?.job?.status).toBe("succeeded");
-      expect(jobStatusRes.data?.job?.result).toBeTruthy();
-
-      // ── Step 7: Lead revokes the connection ──
-      const revokeRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations/${connectionId}/revoke`, {
-        reason: "Integration test complete — revoking connection for security.",
-      });
-      expect(revokeRes.ok).toBe(true);
-      expect(revokeRes.data?.connection?.status).toBe("revoked");
-
-      // ── Step 8: New job submission is rejected ──
-      const blockedRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations/${connectionId}/jobs`, {
-        capability: "application.test",
-        idempotencyKey: `g07-e2e-blocked-${PREFIX}`,
-        payload: { input: "should be blocked" },
-      });
-      expect(blockedRes.ok).toBe(false);
-      expect(blockedRes.status).toBeGreaterThanOrEqual(400);
-    },
-  );
-
-  test("Webhook: valid signature accepted, forged rejected, missing rejected, duplicate rejected", async ({ browser }) => {
-    test.setTimeout(180000);
+test.describe("G07 — Integration Core Full E2E (with standalone worker)", () => {
+  test("full flow: admin approve → create connection → submit job → worker processes → result → revoke → blocked", async ({ browser }) => {
+    test.setTimeout(360000);
 
     const adminCtx = await browser.newContext();
     const adminPage = await adminCtx.newPage();
+    const leadCtx = await browser.newContext();
+    const leadPage = await leadCtx.newPage();
+
+    // Step 1: Admin approves the mock provider
     await signin(adminPage, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await apiCall(adminPage, "POST", "/api/integrations/providers/str.mock.v1/approve", {});
 
-    // Navigate to home to establish origin
-    await adminPage.goto("/");
-    await adminPage.waitForLoadState("networkidle");
-
-    const eventId = `evt-${PREFIX}-${Date.now()}`;
-    const body = JSON.stringify({ type: "test.event", data: { hello: "world" } });
-    const timestamp = Date.now().toString();
-
-    // ── Test: Missing signature → 401 ──
-    const noSigRes = await adminPage.evaluate(
-      async ({ eventId, body, timestamp }) => {
-        const res = await fetch("/api/integrations/webhooks/str.mock.v1", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-str-event-id": eventId,
-            "x-str-event-type": "test.event",
-            "x-str-connection-id": "nonexistent",
-            "x-str-timestamp": timestamp,
-          },
-          body,
-        });
-        return { status: res.status };
+    // Step 2: Lead signs up + creates a project
+    await signupAndVerify(leadPage, `${PREFIX}-lead@str-test.local`, "G07 Lead");
+    const proposalRes = await apiCall(leadPage, "POST", "/api/proposals", {
+      title: `G07 E2E ${PREFIX}`,
+      charter: {
+        problemStatement: "E2E test problem statement with sufficient length for validation purposes.",
+        outcomes: "E2E test outcomes with sufficient length for validation purposes.",
+        scope: "E2E test scope with sufficient length for validation purposes.",
+        requiredSkills: ["TypeScript"],
+        acceptanceCriteria: "E2E test acceptance criteria with sufficient length for validation.",
       },
-      { eventId, body, timestamp },
-    );
-    // Should fail (401 or 404 since connection doesn't exist)
-    expect(noSigRes.status).toBeGreaterThanOrEqual(400);
+    });
+    expect(proposalRes.ok).toBe(true);
+    const proposalId = proposalRes.data?.proposal?.id;
+    await apiCall(leadPage, "POST", `/api/proposals/${proposalId}/submit`, {});
 
-    // ── Test: Forged signature → 401 ──
-    const forgedSigRes = await adminPage.evaluate(
-      async ({ eventId, body, timestamp }) => {
-        const res = await fetch("/api/integrations/webhooks/str.mock.v1", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-str-event-id": `forged-${eventId}`,
-            "x-str-event-type": "test.event",
-            "x-str-connection-id": "nonexistent",
-            "x-str-timestamp": timestamp,
-            "x-str-signature": "forgegforgedfakesignature1234567890",
-          },
-          body,
-        });
-        return { status: res.status };
-      },
-      { eventId, body, timestamp },
-    );
-    // Should fail (404 for nonexistent connection, or 401 for bad signature)
-    expect(forgedSigRes.status).toBeGreaterThanOrEqual(400);
+    // Reviewer approves with steward
+    const stewardCtx = await browser.newContext();
+    const stewardPage = await stewardCtx.newPage();
+    await signin(stewardPage, "steward@str.platform.local", "StewardPass123!");
+    const stewardUserId = await stewardPage.evaluate(async () => { const r = await fetch("/api/auth/session"); return (await r.json())?.user?.id ?? ""; });
+    const approveProposalRes = await apiCall(adminPage, "POST", `/api/proposals/${proposalId}/review`, { action: "APPROVE", reason: "Approved for G07 E2E test.", stewardId: stewardUserId });
+    expect(approveProposalRes.ok).toBe(true);
+
+    const propDetailRes = await apiCall(adminPage, "GET", `/api/proposals/${proposalId}`);
+    const projectId = propDetailRes.data?.proposal?.project?.id;
+    expect(projectId).toBeTruthy();
+
+    // Step 3: Lead creates a connection to the mock provider
+    await signin(leadPage, `${PREFIX}-lead@str-test.local`, PASSWORD);
+    const connRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations`, { providerId: "str.mock.v1", scopes: ["test"] });
+    expect(connRes.ok, `Connection creation failed: ${connRes.error?.message}`).toBe(true);
+    const connectionId = connRes.data?.connection?.id;
+    expect(connectionId).toBeTruthy();
+
+    // Step 4: Lead submits an integration job
+    const jobRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations/${connectionId}/jobs`, { capability: "application.test", idempotencyKey: `g07e2e-${PREFIX}`, payload: { input: "integration test" } });
+    expect(jobRes.ok, `Job submission failed: ${jobRes.error?.message}`).toBe(true);
+    const jobId = jobRes.data?.job?.id;
+    expect(jobId).toBeTruthy();
+
+    // Step 5: STANDALONE WORKER processes the job (no HTTP endpoint — real process)
+    // The worker was started in beforeAll() and polls every 2s.
+    // Poll the job status until it's completed.
+    const jobResult = await pollJobStatus(leadPage, projectId, connectionId, jobId, 30000);
+    expect(jobResult.status).toBe("succeeded");
+    expect(jobResult.result).toBeTruthy();
+
+    // Step 6: Lead revokes the connection
+    const revokeRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations/${connectionId}/revoke`, { reason: "Integration test complete — revoking for security." });
+    expect(revokeRes.ok).toBe(true);
+    expect(revokeRes.data?.connection?.status).toBe("revoked");
+
+    // Step 7: New job submission is rejected
+    const blockedRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations/${connectionId}/jobs`, { capability: "application.test", idempotencyKey: `blocked-${PREFIX}`, payload: { input: "should be blocked" } });
+    expect(blockedRes.ok).toBe(false);
+    expect(blockedRes.status).toBeGreaterThanOrEqual(400);
+  });
+
+  test("webhook: missing signature rejected, forged rejected", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto("/");
+    await page.waitForLoadState("networkidle");
+
+    // Missing signature → 401
+    const noSig = await page.evaluate(async () => {
+      const res = await fetch("/api/integrations/webhooks/str.mock.v1", { method: "POST", headers: { "Content-Type": "application/json", "x-str-event-id": "no-sig-test", "x-str-event-type": "test", "x-str-connection-id": "nonexistent", "x-str-timestamp": Date.now().toString() }, body: JSON.stringify({ test: true }) });
+      return { status: res.status };
+    });
+    expect(noSig.status).toBeGreaterThanOrEqual(400);
+
+    // Forged signature → 401 or 404
+    const forged = await page.evaluate(async () => {
+      const res = await fetch("/api/integrations/webhooks/str.mock.v1", { method: "POST", headers: { "Content-Type": "application/json", "x-str-event-id": "forged-test", "x-str-event-type": "test", "x-str-connection-id": "nonexistent", "x-str-timestamp": Date.now().toString(), "x-str-signature": "fakesignature" }, body: JSON.stringify({ test: true }) });
+      return { status: res.status };
+    });
+    expect(forged.status).toBeGreaterThanOrEqual(400);
   });
 });

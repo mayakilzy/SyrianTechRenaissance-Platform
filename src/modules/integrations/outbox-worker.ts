@@ -1,25 +1,14 @@
 /**
  * STR Integrations — Durable Outbox Worker (G07)
  * ----------------------------------------------
- * Standalone Node process that processes OutboxEvent records.
+ * Standalone Node process with LEASE MECHANISM for durable recovery.
  *
- * Per MASTER G07 directive:
- * - Processes OutboxEvent (NOT directly from IntegrationJob)
- * - Atomic claiming prevents two workers from claiming the same job
- * - Recovery of abandoned jobs (worker crash recovery)
+ * Per MASTER G07 FINAL DURABILITY directive:
+ * - dispatchedAt is set ONLY after the job is fully processed (not at claim)
+ * - Lease: claimedAt/claimedBy track who's working on the event
+ * - Recovery: re-queue events where claimedAt is stale but dispatchedAt is null
+ * - Sync recovery: when re-queuing a job, also re-queue its OutboxEvent
  * - Conditional result writing (no overwrite of cancelled/timed_out)
- * - No Redis — PostgreSQL is sufficient
- *
- * Flow:
- *   1. Find next undelivered OutboxEvent (dispatchedAt IS NULL)
- *   2. Atomically claim it (updateMany WHERE dispatchedAt IS NULL)
- *   3. Find the corresponding IntegrationJob by aggregateId
- *   4. Verify the job is still 'queued' (not cancelled while waiting)
- *   5. Atomically claim the job (updateMany WHERE status='queued' AND claimedBy IS NULL)
- *   6. Execute the job via the adapter
- *   7. Write the result conditionally (WHERE status='running' AND claimedBy=WORKER_ID)
- *      — prevents overwriting cancelled/timed_out status
- *   8. Mark the OutboxEvent as dispatched
  */
 
 import { db } from "@/lib/db";
@@ -33,23 +22,37 @@ const RECOVERY_THRESHOLD_MS = 60000;
 
 const mockAdapter = getMockAdapter();
 
-/**
- * Process one OutboxEvent → IntegrationJob cycle.
- * Returns true if a job was processed, false if no work available.
- */
 export async function processNextOutboxEvent(): Promise<boolean> {
-  // Step 1: Find the next undelivered outbox event
+  // Step 1: Find next unclaimed or stale-claimed outbox event
+  // (dispatchedAt IS NULL = not yet processed)
+  // (claimedAt IS NULL = never claimed) OR (claimedAt < threshold = stale/abandoned)
+  const staleThreshold = new Date(Date.now() - RECOVERY_THRESHOLD_MS);
   const outboxEvent = await db.outboxEvent.findFirst({
-    where: { dispatchedAt: null, aggregate: "integration.job" },
+    where: {
+      dispatchedAt: null,
+      aggregate: "integration.job",
+      OR: [
+        { claimedAt: null },
+        { claimedAt: { lt: staleThreshold } },
+      ],
+    },
     orderBy: { createdAt: "asc" },
-    select: { id: true, aggregateId: true, type: true },
+    select: { id: true, aggregateId: true, type: true, claimedBy: true },
   });
   if (!outboxEvent) return false;
 
-  // Step 2: Atomically claim the outbox event
+  // Step 2: Atomically CLAIM the outbox event (lease)
+  // Only claim if: dispatchedAt is null AND (not claimed OR stale claim)
   const claimed = await db.outboxEvent.updateMany({
-    where: { id: outboxEvent.id, dispatchedAt: null },
-    data: { dispatchedAt: new Date() },
+    where: {
+      id: outboxEvent.id,
+      dispatchedAt: null,
+      OR: [
+        { claimedAt: null },
+        { claimedAt: { lt: staleThreshold } },
+      ],
+    },
+    data: { claimedAt: new Date(), claimedBy: WORKER_ID },
   });
   if (claimed.count === 0) return false; // another worker claimed it
 
@@ -60,17 +63,27 @@ export async function processNextOutboxEvent(): Promise<boolean> {
     select: { id: true, connectionId: true, capability: true, payload: true, idempotencyKey: true, timeoutMs: true, status: true },
   });
   if (!job) {
-    logger.warn("outbox.job.not_found", { jobId, outboxEventId: outboxEvent.id });
+    // Mark the outbox event as dispatched (job doesn't exist — nothing to do)
+    await db.outboxEvent.update({
+      where: { id: outboxEvent.id },
+      data: { dispatchedAt: new Date() },
+    });
+    logger.warn("outbox.job.not_found", { jobId });
     return true;
   }
 
-  // Step 4: If the job was cancelled while waiting, don't execute it
+  // Step 4: Skip if job was cancelled/timed_out while waiting
   if (job.status !== "queued") {
+    // Mark the outbox event as dispatched (job already handled)
+    await db.outboxEvent.update({
+      where: { id: outboxEvent.id },
+      data: { dispatchedAt: new Date() },
+    });
     logger.info("outbox.job.skipped", { jobId, status: job.status });
     return true;
   }
 
-  // Step 5: Atomically claim the job (only if still queued)
+  // Step 5: Atomically claim the IntegrationJob (only if still queued)
   const claimedJob = await db.integrationJob.updateMany({
     where: { id: jobId, status: "queued" },
     data: {
@@ -82,52 +95,41 @@ export async function processNextOutboxEvent(): Promise<boolean> {
     },
   });
   if (claimedJob.count === 0) {
-    // Another worker already claimed it or it was cancelled
-    logger.info("outbox.job.already_claimed", { jobId });
+    // Another worker claimed it or it was cancelled — mark outbox as dispatched
+    await db.outboxEvent.update({
+      where: { id: outboxEvent.id },
+      data: { dispatchedAt: new Date() },
+    });
     return true;
   }
 
-  // Step 6: Get the connection + provider to find the adapter
+  // Step 6: Get connection + adapter
   const connection = await db.integrationConnection.findUnique({
     where: { id: job.connectionId },
     include: { provider: true },
   });
   if (!connection || connection.status !== "active") {
-    // Connection revoked/suspended — mark job as failed (conditional update)
     await db.integrationJob.updateMany({
       where: { id: jobId, status: "running", claimedBy: WORKER_ID },
-      data: {
-        status: "failed",
-        failureCategory: "connection_revoked",
-        failureMessage: `Connection is ${connection?.status ?? "not_found"}`,
-        retryable: false,
-        finishedAt: new Date(),
-      },
+      data: { status: "failed", failureCategory: "connection_revoked", failureMessage: `Connection ${connection?.status ?? "not_found"}`, retryable: false, finishedAt: new Date() },
     });
-    logger.warn("outbox.job.connection_revoked", { jobId });
+    // Mark outbox as dispatched
+    await db.outboxEvent.update({ where: { id: outboxEvent.id }, data: { dispatchedAt: new Date() } });
     return true;
   }
 
-  // Step 7: Get the adapter
   let adapter = getAdapter(connection.providerId);
-  if (!adapter && connection.providerId === MOCK_PROVIDER_ID) {
-    adapter = mockAdapter;
-  }
+  if (!adapter && connection.providerId === MOCK_PROVIDER_ID) adapter = mockAdapter;
   if (!adapter) {
     await db.integrationJob.updateMany({
       where: { id: jobId, status: "running", claimedBy: WORKER_ID },
-      data: {
-        status: "failed",
-        failureCategory: "adapter_not_found",
-        failureMessage: `No adapter for ${connection.providerId}`,
-        retryable: false,
-        finishedAt: new Date(),
-      },
+      data: { status: "failed", failureCategory: "adapter_not_found", failureMessage: `No adapter for ${connection.providerId}`, retryable: false, finishedAt: new Date() },
     });
+    await db.outboxEvent.update({ where: { id: outboxEvent.id }, data: { dispatchedAt: new Date() } });
     return true;
   }
 
-  // Step 8: Execute the job
+  // Step 7: Execute the job
   try {
     const result = await adapter.executeJob({
       capability: job.capability,
@@ -136,9 +138,7 @@ export async function processNextOutboxEvent(): Promise<boolean> {
       idempotencyKey: job.idempotencyKey,
     });
 
-    // Step 9: Write the result CONDITIONALLY
-    // Only update if the job is still 'running' AND claimed by THIS worker
-    // This prevents overwriting 'cancelled' or 'timed_out' status
+    // Step 8: Write result CONDITIONALLY (no overwrite of cancelled/timed_out)
     const updated = await db.integrationJob.updateMany({
       where: { id: jobId, status: "running", claimedBy: WORKER_ID },
       data: {
@@ -152,78 +152,71 @@ export async function processNextOutboxEvent(): Promise<boolean> {
     });
 
     if (updated.count === 0) {
-      // Job was cancelled or timed out while we were executing
-      logger.info("outbox.job.completed_but_overwritten", {
-        jobId,
-        expectedStatus: result.status,
-      });
+      logger.info("outbox.job.completed_but_overwritten", { jobId, expectedStatus: result.status });
     } else {
       logger.info("outbox.job.completed", { jobId, status: result.status });
     }
   } catch (e) {
-    // Unexpected error — write failure conditionally
     await db.integrationJob.updateMany({
       where: { id: jobId, status: "running", claimedBy: WORKER_ID },
-      data: {
-        status: "failed",
-        failureCategory: "unexpected_error",
-        failureMessage: e instanceof Error ? e.message : String(e),
-        retryable: true,
-        finishedAt: new Date(),
-      },
+      data: { status: "failed", failureCategory: "unexpected_error", failureMessage: e instanceof Error ? e.message : String(e), retryable: true, finishedAt: new Date() },
     });
     logger.error("outbox.job.error", { jobId, error: e instanceof Error ? e.message : String(e) });
   }
+
+  // Step 9: Mark the OutboxEvent as dispatched (AFTER processing is complete)
+  // This is the KEY FIX: dispatchedAt is set only after the job finishes,
+  // not when the event is claimed. If the worker crashes after claiming
+  // but before finishing, the recovery will re-queue the outbox event.
+  await db.outboxEvent.update({
+    where: { id: outboxEvent.id },
+    data: { dispatchedAt: new Date() },
+  });
 
   return true;
 }
 
 /**
- * Recover abandoned jobs (worker crashed during execution).
+ * Recover abandoned outbox events (worker crashed after claiming but before completing).
+ * Re-queues events where claimedAt is stale but dispatchedAt is still null.
  */
-export async function recoverAbandonedJobs(): Promise<number> {
-  const recovered = await db.integrationJob.updateMany({
-    where: {
-      status: "running",
-      claimedAt: { lt: new Date(Date.now() - RECOVERY_THRESHOLD_MS) },
-    },
-    data: {
-      status: "queued",
-      claimedBy: null,
-      claimedAt: null,
-      startedAt: null,
-      timeoutAt: null,
-    },
+export async function recoverAbandonedOutboxEvents(): Promise<number> {
+  const staleThreshold = new Date(Date.now() - RECOVERY_THRESHOLD_MS);
+  const recovered = await db.outboxEvent.updateMany({
+    where: { dispatchedAt: null, claimedAt: { lt: staleThreshold } },
+    data: { claimedAt: null, claimedBy: null },
   });
-  if (recovered.count > 0) {
-    logger.info("outbox.recovery", { recoveredCount: recovered.count });
-  }
+  if (recovered.count > 0) logger.info("outbox.recovery.events", { count: recovered.count });
   return recovered.count;
 }
 
 /**
- * Check for timed-out jobs.
+ * Recover abandoned IntegrationJobs (worker crashed during execution).
+ * Also syncs with OutboxEvent recovery.
  */
+export async function recoverAbandonedJobs(): Promise<number> {
+  // Recover stale running jobs → re-queue
+  const recovered = await db.integrationJob.updateMany({
+    where: { status: "running", claimedAt: { lt: new Date(Date.now() - RECOVERY_THRESHOLD_MS) } },
+    data: { status: "queued", claimedBy: null, claimedAt: null, startedAt: null, timeoutAt: null },
+  });
+  if (recovered.count > 0) logger.info("outbox.recovery.jobs", { count: recovered.count });
+
+  // Also recover stale outbox events
+  await recoverAbandonedOutboxEvents();
+
+  return recovered.count;
+}
+
 export async function checkTimeouts(): Promise<number> {
   const timedOut = await db.integrationJob.updateMany({
     where: { status: "running", timeoutAt: { lt: new Date() } },
-    data: {
-      status: "timed_out",
-      failureCategory: "timeout",
-      failureMessage: "Job exceeded timeout",
-      retryable: true,
-      finishedAt: new Date(),
-    },
+    data: { status: "timed_out", failureCategory: "timeout", failureMessage: "Job exceeded timeout", retryable: true, finishedAt: new Date() },
   });
-  if (timedOut.count > 0) {
-    logger.info("outbox.timeout", { timedOutCount: timedOut.count });
-  }
+  if (timedOut.count > 0) logger.info("outbox.timeout", { count: timedOut.count });
   return timedOut.count;
 }
 
-/**
- * Main worker loop (for standalone process).
- */
 export async function runWorkerLoop(): Promise<void> {
   logger.info("outbox.worker.start", { workerId: WORKER_ID });
   // eslint-disable-next-line no-constant-condition
@@ -232,9 +225,7 @@ export async function runWorkerLoop(): Promise<void> {
       await recoverAbandonedJobs();
       await checkTimeouts();
       const hadJob = await processNextOutboxEvent();
-      if (!hadJob) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-      }
+      if (!hadJob) await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     } catch (e) {
       logger.error("outbox.worker.error", { error: e instanceof Error ? e.message : String(e) });
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));

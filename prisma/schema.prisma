@@ -347,11 +347,15 @@ model OutboxEvent {
   aggregateId  String
   type         String // e.g. "integration.job.submitted"
   payload      Json
-  dispatchedAt DateTime?
+  dispatchedAt DateTime?  // set ONLY after the job is fully processed (not at claim time)
   createdAt    DateTime  @default(now())
+  // G07: lease mechanism for durable recovery
+  claimedAt    DateTime?  // when the outbox event was claimed by a worker
+  claimedBy    String?    // which worker claimed it
 
   @@index([dispatchedAt])
   @@index([aggregate, aggregateId])
+  @@index([claimedAt, dispatchedAt])
 }
 
 // ============================================================

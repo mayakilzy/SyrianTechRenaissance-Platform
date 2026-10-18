@@ -72,7 +72,7 @@ async function setupProjectWithProvider() {
 }
 
 describe("G07 — Worker processes OutboxEvent", () => {
-  it.skip("worker processes a queued job via OutboxEvent and writes result (tested via E2E)", async () => {
+  it("worker processes a queued job via OutboxEvent and writes result", async () => {
     run = startTestRun();
     const { projectId, leadId, providerId } = await setupProjectWithProvider();
     const result = await createConnection(leadId, { providerId, projectId, scopes: ["test"] });
@@ -108,7 +108,7 @@ describe("G07 — Worker processes OutboxEvent", () => {
     expect(updatedOutbox?.dispatchedAt).toBeTruthy();
   });
 
-  it("worker does NOT overwrite a cancelled job", async () => {
+  it("worker does NOT overwrite a cancelled job (conditional update)", async () => {
     run = startTestRun();
     const { projectId, leadId, providerId } = await setupProjectWithProvider();
     const result = await createConnection(leadId, { providerId, projectId, scopes: ["test"] });
@@ -119,19 +119,19 @@ describe("G07 — Worker processes OutboxEvent", () => {
       payload: { input: "test" },
     });
 
-    // Manually cancel the job before the worker processes it
+    // Cancel the job before the worker processes it
     await db.integrationJob.update({
       where: { id: job.id },
       data: { status: "cancelled", cancelReason: "Manually cancelled before worker runs", finishedAt: new Date() },
     });
 
-    // Process — the worker should skip the cancelled job
+    // Process — the worker should skip the cancelled job (status !== "queued")
     await processNextOutboxEvent();
 
-    // Verify the job is still cancelled (not overwritten)
+    // Verify the job is still cancelled (not overwritten with "succeeded")
     const updated = await db.integrationJob.findUnique({ where: { id: job.id } });
     expect(updated?.status).toBe("cancelled");
-    expect(updated?.result).toBeNull(); // no result written
+    expect(updated?.result).toBeNull();
   });
 });
 

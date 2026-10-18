@@ -3,6 +3,7 @@ import { receiveWebhookEvent } from "@/modules/integrations/service";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { getMockAdapter } from "@/modules/integrations/mock-adapter";
+import { decryptSecret } from "@/modules/integrations/secret-crypto";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ providerId: string }> }) {
   try {
@@ -54,15 +55,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       return NextResponse.json({ ok: false, error: { code: "STR_FORBIDDEN", message: `Connection is ${conn.status} — not authorized` } }, { status: 403 });
     }
 
-    // Verify the webhook signature using the ACTUAL secret (not the hash)
+    // Decrypt the webhook secret (stored encrypted in DB) for HMAC verification
     if (!conn.webhookSecret) {
       return NextResponse.json({ ok: false, error: { code: "STR_INTERNAL_ERROR", message: "No webhook secret configured for this connection" } }, { status: 500 });
+    }
+    let actualSecret: string;
+    try {
+      actualSecret = decryptSecret(conn.webhookSecret); // decrypt AES-256-GCM ciphertext
+    } catch {
+      return NextResponse.json({ ok: false, error: { code: "STR_INTERNAL_ERROR", message: "Failed to decrypt webhook secret" } }, { status: 500 });
     }
     const mockAdapter = getMockAdapter();
     const signatureValid = await mockAdapter.verifyWebhook({
       headers,
       body,
-      secret: conn.webhookSecret, // the ACTUAL signing secret, not the hash
+      secret: actualSecret, // the DECRYPTED signing secret
     });
 
     // FAIL CLOSED: reject if signature is invalid
