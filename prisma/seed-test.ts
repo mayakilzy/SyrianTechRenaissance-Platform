@@ -197,6 +197,18 @@ async function main() {
     },
   });
 
+  // Idempotent: ensure admin roleGrants exist even if user was created by a previous run
+  const adminUser = await prisma.user.findUnique({ where: { email: "test-admin@str.platform.local" }, select: { id: true } });
+  if (adminUser) {
+    for (const role of ["member", "reviewer", "admin"]) {
+      await prisma.roleGrant.upsert({
+        where: { userId_role_scope: { userId: adminUser.id, role, scope: "global" } },
+        update: { revokedAt: null },
+        create: { userId: adminUser.id, role, scope: "global" },
+      });
+    }
+  }
+
   const pmHash = await hashPassword("PartnershipManagerPass123!");
   await prisma.user.upsert({
     where: { email: "partnership_manager@str.platform.local" },
@@ -240,6 +252,18 @@ async function main() {
     },
   });
 
+  // Idempotent: ensure partnership_manager roleGrants exist
+  const pmUser = await prisma.user.findUnique({ where: { email: "partnership_manager@str.platform.local" }, select: { id: true } });
+  if (pmUser) {
+    for (const role of ["member", "partnership_manager"]) {
+      await prisma.roleGrant.upsert({
+        where: { userId_role_scope: { userId: pmUser.id, role, scope: "global" } },
+        update: { revokedAt: null },
+        create: { userId: pmUser.id, role, scope: "global" },
+      });
+    }
+  }
+
   const modHash = await hashPassword("ModeratorPass123!");
   await prisma.user.upsert({
     where: { email: "moderator@str.platform.local" },
@@ -282,6 +306,18 @@ async function main() {
       profile: { create: { displayName: "STR Moderator", visibility: { create: {} } } },
     },
   });
+
+  // Idempotent: ensure moderator roleGrants exist
+  const modUser = await prisma.user.findUnique({ where: { email: "moderator@str.platform.local" }, select: { id: true } });
+  if (modUser) {
+    for (const role of ["member", "moderator"]) {
+      await prisma.roleGrant.upsert({
+        where: { userId_role_scope: { userId: modUser.id, role, scope: "global" } },
+        update: { revokedAt: null },
+        create: { userId: modUser.id, role, scope: "global" },
+      });
+    }
+  }
 
   console.log("✓ STR test seed: complete (reviewer + steward + member + admin + partnership_manager + moderator with passwords)");
 }
