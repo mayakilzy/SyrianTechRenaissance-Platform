@@ -274,7 +274,7 @@ model IntegrationJob {
   initiatorId     String?
   subjectKind     String
   subjectId       String
-  status          String    @default("queued") // IntegrationJobStatus
+  status          String    @default("queued") // "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timed_out"
   idempotencyKey  String
   payload         Json
   result          Json?
@@ -285,6 +285,15 @@ model IntegrationJob {
   queuedAt        DateTime  @default(now())
   startedAt       DateTime?
   finishedAt      DateTime?
+  // G07: worker claim (atomic job claiming for concurrent workers)
+  claimedBy      String?    // worker instance ID
+  claimedAt      DateTime?
+  // G07: timeout tracking
+  timeoutMs      Int        @default(30000) // default 30s; overridden by capability.timeoutMs
+  timeoutAt      DateTime?  // computed: startedAt + timeoutMs
+  // G07: cancellation
+  cancelReason   String?   @db.Text
+  cancelledById  String?
 
   connection IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   initiator  User?                 @relation("JobInitiator", fields: [initiatorId], references: [id], onDelete: SetNull)
@@ -292,6 +301,8 @@ model IntegrationJob {
   @@unique([connectionId, idempotencyKey])
   @@index([status, queuedAt])
   @@index([subjectKind, subjectId])
+  @@index([claimedBy, claimedAt])
+  @@index([status, claimedAt])
 }
 
 model IntegrationEvent {

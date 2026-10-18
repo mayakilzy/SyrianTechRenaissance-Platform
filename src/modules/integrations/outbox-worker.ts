@@ -34,30 +34,28 @@ const RECOVERY_THRESHOLD_MS = 60000; // 60s — if a job has been claimed for >6
 const mockAdapter = getMockAdapter();
 
 export async function claimAndExecuteJob(): Promise<boolean> {
-  // Atomic claim: SELECT + UPDATE in one query
-  // Uses PostgreSQL's SKIP LOCKED to prevent two workers from claiming the same job
-  const claimed = await db.$queryRaw<Array<{ id: string; connectionId: string; capability: string; payload: unknown; idempotencyKey: string; timeoutMs: number }>>`
-    UPDATE "IntegrationJob"
-    SET "status" = 'running',
-        "claimedBy" = ${WORKER_ID},
-        "claimedAt" = NOW(),
-        "startedAt" = NOW(),
-        "timeoutAt" = NOW() + (${timeoutMs}::int * interval '1 millisecond')
-    WHERE id = (
-      SELECT id FROM "IntegrationJob"
-      WHERE status = 'queued'
-      ORDER BY "queuedAt" ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    )
-    RETURNING id, "connectionId", capability, payload, "idempotencyKey", "timeoutMs"
-  `;
+  // Step 1: Find the next queued job
+  const nextJob = await db.integrationJob.findFirst({
+    where: { status: "queued" },
+    orderBy: { queuedAt: "asc" },
+    select: { id: true, connectionId: true, capability: true, payload: true, idempotencyKey: true, timeoutMs: true },
+  });
+  if (!nextJob) return false;
 
-  if (claimed.length === 0) {
-    return false; // no jobs to process
-  }
+  // Step 2: Atomic claim — only update if still queued (optimistic lock)
+  const claimed = await db.integrationJob.updateMany({
+    where: { id: nextJob.id, status: "queued" },
+    data: {
+      status: "running",
+      claimedBy: WORKER_ID,
+      claimedAt: new Date(),
+      startedAt: new Date(),
+      timeoutAt: new Date(Date.now() + nextJob.timeoutMs),
+    },
+  });
+  if (claimed.count === 0) return false; // another worker claimed it first
 
-  const job = claimed[0];
+  const job = nextJob;
 
   // Get the connection to find the provider
   const connection = await db.integrationConnection.findUnique({

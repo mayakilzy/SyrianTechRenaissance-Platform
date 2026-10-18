@@ -42,7 +42,7 @@ export const jobSubmitSchema = z.object({
   connectionId: z.string().min(1),
   capability: z.string().min(1),
   idempotencyKey: z.string().min(1).max(200),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 export type JobSubmitInput = z.infer<typeof jobSubmitSchema>;
 
@@ -338,7 +338,7 @@ export async function submitJob(submitterId: string, input: JobSubmitInput) {
       subjectId: conn.subjectId,
       status: "queued",
       idempotencyKey: valid.data.idempotencyKey,
-      payload: valid.data.payload,
+      payload: valid.data.payload as never,
       timeoutMs: capability.timeoutMs,
     },
   });
