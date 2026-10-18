@@ -238,11 +238,14 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     run.proposalIds.push(proposal.id);
     run.projectIds.push(project.id);
 
-    // Add member to the team
-    const team = await db.team.findFirst({ where: { projectId: project.id } });
-    if (team) {
-      await db.teamMembership.create({ data: { teamId: team.id, userId: memberId, role: "MEMBER" } });
+    // Add member to the team (robust: create team if missing, then add membership)
+    let team = await db.team.findFirst({ where: { projectId: project.id } });
+    if (!team) {
+      team = await db.team.create({ data: { projectId: project.id, name: `Team ${run.runId}` } });
     }
+    await db.teamMembership.create({
+      data: { teamId: team.id, userId: memberId, role: "MEMBER" },
+    }).catch(() => {}); // ignore if already exists
 
     // Create a thread + message (the offending content)
     const { createThread, getThread, postMessage } = await import("@/modules/communications/threads");
