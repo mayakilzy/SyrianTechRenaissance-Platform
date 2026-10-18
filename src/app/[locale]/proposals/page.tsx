@@ -36,7 +36,7 @@ export default async function ProposalsPage({ params }: { params: Promise<{ loca
     <div className="min-h-screen bg-background flex flex-col"
       dir={locale === "ar" ? "rtl" : "ltr"}
     >
-      <SiteHeader />>
+      <SiteHeader />
       <div className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">{t("title")}</h1>
