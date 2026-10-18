@@ -52,6 +52,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
 
     return NextResponse.json({ ok: true, data: { eventId: event.id, signatureValid } });
   } catch (e) {
+    // Use the shared fail() helper which handles AppError types properly
+    // (returns the correct HTTP status for ConflictError=409, NotFoundError=404, etc.)
+    if (e && typeof e === "object" && "code" in e && "status" in e) {
+      const appErr = e as { code: string; status: number; message: string };
+      return NextResponse.json(
+        { ok: false, error: { code: appErr.code, message: appErr.message } },
+        { status: appErr.status },
+      );
+    }
     logger.error("api.integrations.webhook", { error: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ ok: false, error: { code: "STR_INTERNAL_ERROR", message: "Internal error" } }, { status: 500 });
   }
