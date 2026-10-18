@@ -125,6 +125,21 @@ export async function getThread(threadId: string, actorId: string) {
   if (!ctx.isLead && !ctx.isSteward && !ctx.isMember && !ctx.isAdmin) {
     throw new NotFoundError("Thread not found");
   }
+  // G06 moderation correction: hide removed messages from regular users.
+  // Admins and moderators can see removed messages (with removedAt indicator)
+  // for audit purposes. The original body is preserved for authorized auditors.
+  // Regular users see removed messages as "[removed]" placeholders — they
+  // know a message was removed, but cannot see the content.
+  const adminGrant = await db.roleGrant.findFirst({
+    where: { userId: actorId, revokedAt: null, OR: [{ role: "admin" }, { role: "moderator" }] },
+  });
+  const canSeeRemoved = !!adminGrant || ctx.isAdmin;
+  if (!canSeeRemoved) {
+    // For regular users: redact removed messages (replace body with placeholder)
+    thread.messages = thread.messages.map((m) =>
+      m.removedAt ? { ...m, body: "[removed — content hidden by moderation decision]" } : m,
+    );
+  }
   return thread;
 }
 

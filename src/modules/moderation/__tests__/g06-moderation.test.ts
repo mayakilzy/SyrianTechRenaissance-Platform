@@ -128,7 +128,7 @@ describe("G06-B — Moderator role enforcement", () => {
 });
 
 describe("G06-B — Admin USER_SUSPENDED (anti-self-suspension)", () => {
-  it("admin can suspend a user (atomic with audit event)", async () => {
+  it("admin can suspend a user (atomic with audit event) — status is RESOLVED_SUSPENDED (not ESCALATED)", async () => {
     run = startTestRun();
     const complainantId = await createTestUser(run, "member");
     const targetId = await createTestUser(run, "member");
@@ -141,7 +141,8 @@ describe("G06-B — Admin USER_SUSPENDED (anti-self-suspension)", () => {
       action: "USER_SUSPENDED",
       reason: "Account suspended due to severe and repeated violations of community standards.",
     });
-    expect(result.newStatus).toBe("ESCALATED"); // ESCALATED is the status for USER_SUSPENDED decisions
+    // USER_SUSPENDED → RESOLVED_SUSPENDED (terminal status, NOT ESCALATED)
+    expect(result.newStatus).toBe("RESOLVED_SUSPENDED");
     // Verify user is actually suspended
     const target = await db.user.findUnique({ where: { id: targetId } });
     expect(target?.status).toBe("SUSPENDED");
@@ -150,6 +151,38 @@ describe("G06-B — Admin USER_SUSPENDED (anti-self-suspension)", () => {
       where: { action: "moderation.user_suspended", targetId: complaint.id },
     });
     expect(audit).toBeTruthy();
+    // CRITICAL: the complaint is NOT in the open escalation queue
+    const fetched = await db.moderationComplaint.findUnique({ where: { id: complaint.id } });
+    expect(fetched?.status).toBe("RESOLVED_SUSPENDED");
+    expect(fetched?.status).not.toBe("ESCALATED");
+    expect(fetched?.decidedAt).toBeTruthy();
+  });
+
+  it("USER_SUSPENDED complaint does NOT appear in the open escalation queue", async () => {
+    run = startTestRun();
+    const complainantId = await createTestUser(run, "member");
+    const targetId = await createTestUser(run, "member");
+    const adminId = await createTestUser(run, "admin");
+    const complaint = await fileComplaint(complainantId, {
+      targetUserId: targetId,
+      reason: "Complaint that should be fully resolved after suspension, not left in escalation queue.",
+    });
+    await decideComplaint(complaint.id, adminId, {
+      action: "USER_SUSPENDED",
+      reason: "Suspended — the complaint should now be in a terminal status, not escalation.",
+    });
+    // List all complaints with status ESCALATED — this one should NOT be there
+    const escalated = await db.moderationComplaint.findMany({
+      where: { status: "ESCALATED" },
+    });
+    const isThisComplaintEscalated = escalated.some((c) => c.id === complaint.id);
+    expect(isThisComplaintEscalated).toBe(false);
+    // But it IS in RESOLVED_SUSPENDED
+    const resolved = await db.moderationComplaint.findMany({
+      where: { status: "RESOLVED_SUSPENDED" },
+    });
+    const isThisComplaintResolved = resolved.some((c) => c.id === complaint.id);
+    expect(isThisComplaintResolved).toBe(true);
   });
 
   it("prevents admin from suspending their own account", async () => {
@@ -170,25 +203,96 @@ describe("G06-B — Admin USER_SUSPENDED (anti-self-suspension)", () => {
 });
 
 describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
-  it("CONTENT_REMOVED does not delete the complaint or evidence", async () => {
+  it("CONTENT_REMOVED sets removedAt on target message + hides from regular users", async () => {
     run = startTestRun();
-    const complainantId = await createTestUser(run, "member");
-    const targetId = await createTestUser(run, "member");
-    const modId = await createTestUser(run, "moderator");
-    const complaint = await fileComplaint(complainantId, {
-      targetUserId: targetId,
-      reason: "Offensive content that should be removed but preserved for audit purposes.",
+    // Setup: create a project + thread + message (the offending content)
+    const adminId = await createTestUser(run, "admin");
+    const leadId = await createTestUser(run, "rep"); // project lead
+    const memberId = await createTestUser(run, "member"); // regular member
+    const modId = await createTestUser(run, "moderator"); // moderator
+
+    // Create proposal + project via G03 service
+    const { createProposal, submitProposal, reviewProposal } = await import("@/modules/proposals/service");
+    const proposal = await createProposal({
+      submitterId: leadId,
+      title: `G06 Content Removal Test ${run.runId}`,
+      charter: {
+        problemStatement: "Test problem statement with sufficient length for validation purposes here.",
+        outcomes: "Test outcomes with sufficient length for validation purposes here.",
+        scope: "Test scope with sufficient length for validation purposes here.",
+        requiredSkills: ["TypeScript"],
+        acceptanceCriteria: "Test acceptance criteria with sufficient length for validation.",
+      },
+    });
+    await submitProposal(proposal.id, leadId);
+    await reviewProposal({
+      proposalId: proposal.id,
+      reviewerId: adminId,
+      action: "APPROVE",
+      reason: "Approved for content removal test.",
+      stewardId: adminId,
+    });
+    const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
+    if (!project) throw new Error("Project not created");
+    run.proposalIds.push(proposal.id);
+    run.projectIds.push(project.id);
+
+    // Add member to the team
+    const team = await db.team.findFirst({ where: { projectId: project.id } });
+    if (team) {
+      await db.teamMembership.create({ data: { teamId: team.id, userId: memberId, role: "MEMBER" } });
+    }
+
+    // Create a thread + message (the offending content)
+    const { createThread, getThread, postMessage } = await import("@/modules/communications/threads");
+    const thread = await createThread(project.id, leadId, {
+      title: "Thread with offending message",
+      initialMessage: "Initial message in the thread.",
+    });
+    const offendingMessage = await postMessage(thread.id, memberId, {
+      body: "This is the offensive content that should be removed from view.",
+    });
+
+    // File a complaint targeting the specific message
+    const complaint = await fileComplaint(memberId, {
+      projectId: project.id,
+      threadId: thread.id,
+      targetMessageId: offendingMessage.id,
+      targetUserId: memberId,
+      reason: "The message above contains offensive content that should be removed from public view.",
       evidenceText: "This is the offensive content that was quoted as evidence.",
     });
+
+    // Moderator decides CONTENT_REMOVED
     await decideComplaint(complaint.id, modId, {
       action: "CONTENT_REMOVED",
       reason: "Content removed for violation; original preserved for audit per G06 policy.",
     });
-    // Verify the complaint + evidence are still in the DB (NOT deleted)
+
+    // Verify the complaint status is RESOLVED_REMOVED
     const fetched = await db.moderationComplaint.findUnique({ where: { id: complaint.id } });
-    expect(fetched).toBeTruthy();
-    expect(fetched?.evidenceText).toBe("This is the offensive content that was quoted as evidence.");
     expect(fetched?.status).toBe("RESOLVED_REMOVED");
+    expect(fetched?.evidenceText).toBe("This is the offensive content that was quoted as evidence.");
+
+    // CRITICAL: the target message's removedAt is set (actual visibility enforcement)
+    const message = await db.threadMessage.findUnique({ where: { id: offendingMessage.id } });
+    expect(message?.removedAt).toBeTruthy();
+    expect(message?.removedById).toBe(modId);
+    // The original body is PRESERVED (not deleted)
+    expect(message?.body).toBe("This is the offensive content that should be removed from public view.");
+
+    // CRITICAL: regular member sees "[removed]" placeholder, not the original content
+    const memberView = await getThread(thread.id, memberId);
+    const removedMessageInView = memberView.messages.find((m) => m.id === offendingMessage.id);
+    expect(removedMessageInView?.removedAt).toBeTruthy();
+    expect(removedMessageInView?.body).toBe("[removed — content hidden by moderation decision]");
+    expect(removedMessageInView?.body).not.toContain("offensive content");
+
+    // CRITICAL: admin/moderator CAN see the original content (for audit)
+    const modView = await getThread(thread.id, modId);
+    const modMessageView = modView.messages.find((m) => m.id === offendingMessage.id);
+    expect(modMessageView?.removedAt).toBeTruthy();
+    expect(modMessageView?.body).toBe("This is the offensive content that should be removed from public view.");
   });
 });
 

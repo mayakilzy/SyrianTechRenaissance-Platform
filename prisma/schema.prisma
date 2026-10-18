@@ -87,6 +87,7 @@ model User {
   moderationComplaintsFiled   ModerationComplaint[]      @relation("ModerationComplainant")
   moderationComplaintsTargeted ModerationComplaint[]     @relation("ModerationTarget")
   moderationDecisionsMade     ModerationDecision[]       @relation("ModerationDecider")
+  messagesRemoved             ThreadMessage[]              @relation("MessageRemover")
   impactRecordsRecorded       ImpactRecord[]            @relation("ImpactRecorder")
 
 
@@ -1200,12 +1201,20 @@ model ThreadMessage {
   body        String   @db.Text
   createdAt   DateTime @default(now())
   editedAt    DateTime?
+  // G06 moderation correction: removedAt + removedById for CONTENT_REMOVED enforcement.
+  // When set, the message is hidden from regular users in read paths.
+  // The original body is preserved for authorized auditors (admin/moderator).
+  removedAt   DateTime?
+  removedById String?
 
   thread  ProjectThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   author  User           @relation("ThreadMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  removedBy User?        @relation("MessageRemover", fields: [removedById], references: [id], onDelete: SetNull)
+  complaintTargetMessage ModerationComplaint[] @relation("ComplaintTargetMessage")
 
   @@index([threadId])
   @@index([authorId])
+  @@index([removedAt])
 }
 
 // ------------------------------------------------------------
@@ -1213,28 +1222,31 @@ model ThreadMessage {
 // ------------------------------------------------------------
 
 model ModerationComplaint {
-  id            String   @id @default(cuid())
-  complainantId String
-  projectId     String?  // optional project scope
-  threadId      String?  // optional thread scope
-  targetUserId  String?  // optional user scope
-  reason        String   @db.Text
-  evidenceText  String?   @db.Text  // quoted content (preserves original even if message later removed)
-  status        ModerationStatus @default(SUBMITTED)
-  submittedAt   DateTime @default(now())
-  decidedAt     DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(cuid())
+  complainantId    String
+  projectId        String?  // optional project scope
+  threadId         String?  // optional thread scope
+  targetUserId     String?  // optional user scope
+  targetMessageId  String?  // optional specific message (for CONTENT_REMOVED targeting)
+  reason           String   @db.Text
+  evidenceText     String?   @db.Text  // quoted content (preserves original even if message later removed)
+  status           ModerationStatus @default(SUBMITTED)
+  submittedAt      DateTime @default(now())
+  decidedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  complainant User             @relation("ModerationComplainant", fields: [complainantId], references: [id], onDelete: Cascade)
-  project     Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  thread      ProjectThread?   @relation(fields: [threadId], references: [id], onDelete: SetNull)
-  targetUser  User?            @relation("ModerationTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
-  decisions   ModerationDecision[]
+  complainant     User             @relation("ModerationComplainant", fields: [complainantId], references: [id], onDelete: Cascade)
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  thread          ProjectThread?   @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  targetUser      User?            @relation("ModerationTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetMessage   ThreadMessage?   @relation("ComplaintTargetMessage", fields: [targetMessageId], references: [id], onDelete: SetNull)
+  decisions       ModerationDecision[]
 
   @@index([projectId])
   @@index([status])
   @@index([targetUserId])
+  @@index([targetMessageId])
 }
 
 enum ModerationStatus {
@@ -1243,6 +1255,7 @@ enum ModerationStatus {
   RESOLVED_WARNING
   RESOLVED_REMOVED
   RESOLVED_DISMISSED
+  RESOLVED_SUSPENDED // terminal status for USER_SUSPENDED decisions (not ESCALATED)
   ESCALATED
 }
 

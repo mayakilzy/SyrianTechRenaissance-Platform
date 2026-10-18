@@ -46,6 +46,7 @@ export const complaintCreateSchema = z.object({
   projectId: z.string().optional(),
   threadId: z.string().optional(),
   targetUserId: z.string().optional(),
+  targetMessageId: z.string().optional(), // explicit message targeting for CONTENT_REMOVED
   reason: z.string().min(10).max(5000),
   evidenceText: z.string().max(10000).optional(),
 });
@@ -106,6 +107,18 @@ export async function fileComplaint(
     }
     if (!valid.data.projectId) valid.data.projectId = thread.projectId;
   }
+  // Verify targetMessageId belongs to threadId (if both provided)
+  if (valid.data.targetMessageId) {
+    const message = await db.threadMessage.findUnique({
+      where: { id: valid.data.targetMessageId },
+      select: { threadId: true },
+    });
+    if (!message) throw new NotFoundError("Target message not found");
+    if (valid.data.threadId && message.threadId !== valid.data.threadId) {
+      throw new ValidationError("Target message does not belong to the specified thread");
+    }
+    if (!valid.data.threadId) valid.data.threadId = message.threadId;
+  }
   // Verify projectId exists (if provided)
   if (valid.data.projectId) {
     const project = await db.project.findUnique({ where: { id: valid.data.projectId }, select: { id: true } });
@@ -127,6 +140,7 @@ export async function fileComplaint(
       projectId: valid.data.projectId || null,
       threadId: valid.data.threadId || null,
       targetUserId: valid.data.targetUserId || null,
+      targetMessageId: valid.data.targetMessageId || null,
       reason: valid.data.reason,
       evidenceText: valid.data.evidenceText || null,
       status: "SUBMITTED",
@@ -242,11 +256,14 @@ export async function decideComplaint(
     throw new ConflictError("Cannot suspend: complaint has no target user");
   }
 
-  // Compute new status
-  let newStatus: "RESOLVED_WARNING" | "RESOLVED_REMOVED" | "RESOLVED_DISMISSED" | "ESCALATED";
+  // Compute new status — each action maps to a clear terminal status
+  // USER_SUSPENDED → RESOLVED_SUSPENDED (NOT ESCALATED; the action was executed)
+  // ESCALATE → ESCALATED (the only action that stays in the open queue)
+  let newStatus: "RESOLVED_WARNING" | "RESOLVED_REMOVED" | "RESOLVED_DISMISSED" | "RESOLVED_SUSPENDED" | "ESCALATED";
   if (valid.data.action === "WARNING") newStatus = "RESOLVED_WARNING";
   else if (valid.data.action === "CONTENT_REMOVED") newStatus = "RESOLVED_REMOVED";
   else if (valid.data.action === "DISMISS") newStatus = "RESOLVED_DISMISSED";
+  else if (valid.data.action === "USER_SUSPENDED") newStatus = "RESOLVED_SUSPENDED";
   else newStatus = "ESCALATED"; // ESCALATE → stays in escalation queue
 
   // Atomic transaction
@@ -275,11 +292,14 @@ export async function decideComplaint(
         data: { status: "SUSPENDED" },
       });
     }
-    // CONTENT_REMOVED: flag the offending message (do NOT delete it)
-    if (valid.data.action === "CONTENT_REMOVED" && complaint.threadId) {
-      // For now, we preserve the message body (no separate removedAt field in G06-B).
-      // The audit event + decision record preserve the fact that removal was decided.
-      // A future schema change could add ThreadMessage.removedAt if needed.
+    // CONTENT_REMOVED: set removedAt on the target message (do NOT delete the body)
+    // The original text is preserved for authorized auditors (admin/moderator);
+    // regular users will not see it in read paths (enforced in threads.ts getThread).
+    if (valid.data.action === "CONTENT_REMOVED" && complaint.targetMessageId) {
+      await tx.threadMessage.updateMany({
+        where: { id: complaint.targetMessageId, removedAt: null },
+        data: { removedAt: new Date(), removedById: deciderId },
+      });
     }
     // Audit event
     await tx.auditEvent.create({
