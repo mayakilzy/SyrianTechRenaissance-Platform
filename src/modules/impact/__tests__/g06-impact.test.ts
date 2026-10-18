@@ -24,11 +24,11 @@ afterEach(async () => {
   if (run) await cleanupTestRun(run);
 });
 
-async function setupProject() {
+async function setupProject(suffix = "0") {
   const leadId = (await db.user.create({
     data: {
-      email: `g06b-lead-${run.runId}@test.local`,
-      displayName: `Lead ${run.runId}`,
+      email: `g06b-lead-${run.runId}-${suffix}@test.local`,
+      displayName: `Lead ${run.runId}-${suffix}`,
       locale: "ar",
       status: "ACTIVE",
       emailVerified: new Date(),
@@ -37,8 +37,8 @@ async function setupProject() {
   })).id;
   const reviewerId = (await db.user.create({
     data: {
-      email: `g06b-rev-${run.runId}@test.local`,
-      displayName: `Rev ${run.runId}`,
+      email: `g06b-rev-${run.runId}-${suffix}@test.local`,
+      displayName: `Rev ${run.runId}-${suffix}`,
       locale: "ar",
       status: "ACTIVE",
       emailVerified: new Date(),
@@ -47,8 +47,8 @@ async function setupProject() {
   })).id;
   const stewardId = (await db.user.create({
     data: {
-      email: `g06b-stw-${run.runId}@test.local`,
-      displayName: `Stw ${run.runId}`,
+      email: `g06b-stw-${run.runId}-${suffix}@test.local`,
+      displayName: `Stw ${run.runId}-${suffix}`,
       locale: "ar",
       status: "ACTIVE",
       emailVerified: new Date(),
