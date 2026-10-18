@@ -402,3 +402,5 @@ test.describe("G08 — Visual + Accessibility", () => {
     expect(hasHorizontalScroll).toBe(false);
   });
 });
+
+}
