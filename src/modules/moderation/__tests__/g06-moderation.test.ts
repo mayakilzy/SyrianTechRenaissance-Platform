@@ -281,7 +281,7 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     expect(message?.removedAt).toBeTruthy();
     expect(message?.removedById).toBe(modId);
     // The original body is PRESERVED (not deleted)
-    expect(message?.body).toBe("This is the offensive content that should be removed from public view.");
+    expect(message?.body).toBe("This is the offensive content that should be removed from view.");
 
     // CRITICAL: regular member sees "[removed]" placeholder, not the original content
     const memberView = await getThread(thread.id, memberId);
@@ -294,7 +294,7 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     const modView = await getThread(thread.id, modId);
     const modMessageView = modView.messages.find((m) => m.id === offendingMessage.id);
     expect(modMessageView?.removedAt).toBeTruthy();
-    expect(modMessageView?.body).toBe("This is the offensive content that should be removed from public view.");
+    expect(modMessageView?.body).toBe("This is the offensive content that should be removed from view.");
   });
 });
 
