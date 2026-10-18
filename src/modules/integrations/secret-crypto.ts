@@ -54,6 +54,9 @@ export function decryptSecret(encrypted: string): string {
     throw new Error("Invalid encrypted secret format (expected iv:ciphertext:authTag)");
   }
   const [ivB64, ciphertextB64, authTagB64] = parts;
+  if (!ivB64 || !ciphertextB64 || !authTagB64) {
+    throw new Error("Invalid encrypted secret format (missing parts)");
+  }
   const iv = Buffer.from(ivB64, "base64");
   const ciphertext = Buffer.from(ciphertextB64, "base64");
   const authTag = Buffer.from(authTagB64, "base64");
