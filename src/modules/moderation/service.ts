@@ -256,6 +256,30 @@ export async function decideComplaint(
     throw new ConflictError("Cannot suspend: complaint has no target user");
   }
 
+  // CONTENT_REMOVED requires a valid targetMessageId that matches the complaint's thread.
+  // This is a pre-transaction check — if it fails, no decision record is created.
+  if (valid.data.action === "CONTENT_REMOVED") {
+    if (!complaint.targetMessageId) {
+      throw new ConflictError(
+        "CONTENT_REMOVED requires a targetMessageId — cannot remove content without specifying which message",
+      );
+    }
+    // Verify the target message exists and belongs to the complaint's thread
+    const targetMessage = await db.threadMessage.findUnique({
+      where: { id: complaint.targetMessageId },
+      select: { threadId: true, removedAt: true },
+    });
+    if (!targetMessage) {
+      throw new ConflictError("Target message not found — cannot remove content from a non-existent message");
+    }
+    if (complaint.threadId && targetMessage.threadId !== complaint.threadId) {
+      throw new ConflictError("Target message does not belong to the complaint's thread — mismatch");
+    }
+    if (targetMessage.removedAt) {
+      throw new ConflictError("Target message is already removed — cannot remove again");
+    }
+  }
+
   // Compute new status — each action maps to a clear terminal status
   // USER_SUSPENDED → RESOLVED_SUSPENDED (NOT ESCALATED; the action was executed)
   // ESCALATE → ESCALATED (the only action that stays in the open queue)
@@ -292,14 +316,19 @@ export async function decideComplaint(
         data: { status: "SUSPENDED" },
       });
     }
-    // CONTENT_REMOVED: set removedAt on the target message (do NOT delete the body)
-    // The original text is preserved for authorized auditors (admin/moderator);
-    // regular users will not see it in read paths (enforced in threads.ts getThread).
+    // CONTENT_REMOVED: set removedAt on the target message — MUST succeed (exactly 1 row).
+    // If the update fails (e.g., message was removed concurrently), the entire
+    // transaction rolls back: no decision record, no status change, no audit event.
     if (valid.data.action === "CONTENT_REMOVED" && complaint.targetMessageId) {
-      await tx.threadMessage.updateMany({
+      const messageUpdate = await tx.threadMessage.updateMany({
         where: { id: complaint.targetMessageId, removedAt: null },
         data: { removedAt: new Date(), removedById: deciderId },
       });
+      if (messageUpdate.count !== 1) {
+        throw new ConflictError(
+          "CONTENT_REMOVED failed: target message was not hidden (already removed or not found). Transaction rolled back — no decision recorded.",
+        );
+      }
     }
     // Audit event
     await tx.auditEvent.create({

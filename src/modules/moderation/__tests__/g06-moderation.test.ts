@@ -299,6 +299,102 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     expect(adminMessageView?.removedAt).toBeTruthy();
     expect(adminMessageView?.body).toBe("This is the offensive content that should be removed from view.");
   });
+
+  it("CONTENT_REMOVED rejected when complaint has no targetMessageId", async () => {
+    run = startTestRun();
+    const complainantId = await createTestUser(run, "member");
+    const targetId = await createTestUser(run, "member");
+    const modId = await createTestUser(run, "moderator");
+    // File a complaint WITHOUT targetMessageId — only targetUserId
+    const complaint = await fileComplaint(complainantId, {
+      targetUserId: targetId,
+      reason: "Complaint without a specific message target — CONTENT_REMOVED should be rejected.",
+    });
+    // Moderator tries CONTENT_REMOVED — must fail (no targetMessageId)
+    await expect(
+      decideComplaint(complaint.id, modId, {
+        action: "CONTENT_REMOVED",
+        reason: "Trying to remove content without a target message — should be blocked.",
+      }),
+    ).rejects.toThrow(ConflictError);
+    // Verify no decision was recorded
+    const decisions = await db.moderationDecision.findMany({ where: { complaintId: complaint.id } });
+    expect(decisions.length).toBe(0);
+    // Verify complaint is still in a non-terminal status
+    const fetched = await db.moderationComplaint.findUnique({ where: { id: complaint.id } });
+    expect(fetched?.status).toBe("SUBMITTED");
+  });
+
+  it("CONTENT_REMOVED rejected when targetMessageId mismatches the complaint's thread", async () => {
+    run = startTestRun();
+    const adminId = await createTestUser(run, "admin");
+    const stewardId = await createTestUser(run, "admin");
+    const leadId = await createTestUser(run, "rep");
+    const modId = await createTestUser(run, "moderator");
+
+    // Create project via G03
+    const { createProposal, submitProposal, reviewProposal } = await import("@/modules/proposals/service");
+    const proposal = await createProposal({
+      submitterId: leadId,
+      title: `G06 Mismatch Test ${run.runId}`,
+      charter: {
+        problemStatement: "Test problem statement with sufficient length for validation purposes here.",
+        outcomes: "Test outcomes with sufficient length for validation purposes here.",
+        scope: "Test scope with sufficient length for validation purposes here.",
+        requiredSkills: ["TypeScript"],
+        acceptanceCriteria: "Test acceptance criteria with sufficient length for validation.",
+      },
+    });
+    await submitProposal(proposal.id, leadId);
+    await reviewProposal({
+      proposalId: proposal.id,
+      reviewerId: adminId,
+      action: "APPROVE",
+      reason: "Approved for mismatch test.",
+      stewardId: stewardId,
+    });
+    const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
+    if (!project) throw new Error("Project not created");
+    run.proposalIds.push(proposal.id);
+    run.projectIds.push(project.id);
+
+    // Create two threads with messages
+    const { createThread, postMessage } = await import("@/modules/communications/threads");
+    const threadA = await createThread(project.id, leadId, {
+      title: "Thread A",
+      initialMessage: "Message in thread A.",
+    });
+    const threadB = await createThread(project.id, leadId, {
+      title: "Thread B",
+      initialMessage: "Message in thread B.",
+    });
+    const messageB = await postMessage(threadB.id, leadId, {
+      body: "Offending content in thread B — but the complaint is about thread A.",
+    });
+
+    // File a complaint about thread A but with targetMessageId pointing to thread B's message
+    const complaint = await fileComplaint(leadId, {
+      projectId: project.id,
+      threadId: threadA.id, // complaint is about thread A
+      targetMessageId: messageB.id, // but target message is in thread B — MISMATCH
+      targetUserId: leadId,
+      reason: "Complaint with a mismatched targetMessageId — should be rejected for CONTENT_REMOVED.",
+    });
+
+    // Moderator tries CONTENT_REMOVED — must fail (mismatch)
+    await expect(
+      decideComplaint(complaint.id, modId, {
+        action: "CONTENT_REMOVED",
+        reason: "Trying to remove a message that doesn't belong to the complaint's thread.",
+      }),
+    ).rejects.toThrow(ConflictError);
+    // Verify no decision was recorded
+    const decisions = await db.moderationDecision.findMany({ where: { complaintId: complaint.id } });
+    expect(decisions.length).toBe(0);
+    // Verify the message was NOT removed (transaction rolled back)
+    const message = await db.threadMessage.findUnique({ where: { id: messageB.id } });
+    expect(message?.removedAt).toBeNull();
+  });
 });
 
 describe("G06-B — Cross-user visibility (test EXISTING complaints)", () => {
