@@ -377,7 +377,7 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     const complaint = await fileComplaint(leadId, {
       projectId: project.id,
       threadId: threadA.id, // complaint is about thread A
-      targetUserId: leadId,
+      // no targetUserId — we're testing targetMessageId mismatch, not user targeting
       reason: "Complaint that will have a mismatched targetMessageId set after filing.",
     });
     // Manually set targetMessageId to a message in thread B (mismatch with thread A)
