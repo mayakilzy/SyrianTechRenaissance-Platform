@@ -207,6 +207,7 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
     run = startTestRun();
     // Setup: create a project + thread + message (the offending content)
     const adminId = await createTestUser(run, "admin");
+    const stewardId = await createTestUser(run, "admin"); // separate steward (G03 requires stewardId !== reviewerId)
     const leadId = await createTestUser(run, "rep"); // project lead
     const memberId = await createTestUser(run, "member"); // regular member
     const modId = await createTestUser(run, "moderator"); // moderator
@@ -230,7 +231,7 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
       reviewerId: adminId,
       action: "APPROVE",
       reason: "Approved for content removal test.",
-      stewardId: adminId,
+      stewardId: stewardId, // separate steward (separation of duties)
     });
     const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
     if (!project) throw new Error("Project not created");
