@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -30,7 +30,7 @@ function recordScreenshot(file: string, page: string, locale: string, viewport: 
 test.afterAll(async () => {
   mkdirSync(SCREENSHOTS_DIR, { recursive: true });
   try {
-    const { readdirSync } = require("node:fs");
+    const { readdirSync } = await import("node:fs");
     const files = readdirSync(SCREENSHOTS_DIR);
     const metaFiles = files.filter(f => f.endsWith(".meta.json"));
     const manifest = metaFiles.map(f => {
