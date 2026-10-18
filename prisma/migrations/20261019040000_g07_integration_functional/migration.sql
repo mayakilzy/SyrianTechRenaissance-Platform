@@ -17,6 +17,7 @@ CREATE INDEX "IntegrationProvider_isMock_idx" ON "IntegrationProvider"("isMock")
 
 -- 2. IntegrationConnection: webhook secret + suspend fields
 ALTER TABLE "IntegrationConnection" ADD COLUMN "revokedReason" TEXT;
+ALTER TABLE "IntegrationConnection" ADD COLUMN "webhookSecret" TEXT;
 ALTER TABLE "IntegrationConnection" ADD COLUMN "webhookSecretHash" TEXT;
 ALTER TABLE "IntegrationConnection" ADD COLUMN "suspendedAt" TIMESTAMP(3);
 ALTER TABLE "IntegrationConnection" ADD COLUMN "suspendedReason" TEXT;
