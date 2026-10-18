@@ -75,6 +75,8 @@ export function SiteHeader() {
                 href={pathname?.replace(/^\/(en|ar)/, "/ar") || "/ar"}
                 className={`px-2 py-1 text-xs rounded ${locale === "ar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 aria-current={locale === "ar" ? "page" : undefined}
+                aria-label="العربية"
+                title="العربية"
               >
                 ع
               </Link>
@@ -82,6 +84,8 @@ export function SiteHeader() {
                 href={pathname?.replace(/^\/(en|ar)/, "/en") || "/en"}
                 className={`px-2 py-1 text-xs rounded ${locale === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
                 aria-current={locale === "en" ? "page" : undefined}
+                aria-label="English"
+                title="English"
               >
                 EN
               </Link>
