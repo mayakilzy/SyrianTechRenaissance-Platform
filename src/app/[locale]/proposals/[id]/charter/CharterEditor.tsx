@@ -93,7 +93,7 @@ export function CharterEditor({ proposalId, initialRevision, locale, status }: P
           <Badge variant={status === "DRAFT" ? "outline" : "secondary"}>{status}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          {isAr ? "نموذج منظم مع معاينة حية — استخدم خدمات G03 للحفظ" : "Structured form with live preview — uses G03 services"}
+          {isAr ? "نموذج منظم مع معاينة حية" : "Structured form with live preview"}
         </p>
       </header>
 

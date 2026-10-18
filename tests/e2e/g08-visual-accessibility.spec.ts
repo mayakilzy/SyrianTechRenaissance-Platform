@@ -199,7 +199,7 @@ test.describe("G08 — Visual + Accessibility", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "G08 Charter Save Test",
+          title: "Charter Editor Save Test",
           charter: {
             problemStatement: "Original problem statement with sufficient length for validation purposes.",
             outcomes: "Original outcomes with sufficient length for validation purposes.",
@@ -225,7 +225,7 @@ test.describe("G08 — Visual + Accessibility", () => {
 
     // Step 5: Modify a field value
     const originalValue = await firstTextarea.inputValue();
-    const newValue = "MODIFIED: This problem statement was edited in the G08 charter editor save flow test.";
+    const newValue = "MODIFIED: Updated problem statement reflecting community feedback from the latest review cycle.";
     await firstTextarea.fill(newValue);
     await expect(firstTextarea).toHaveValue(newValue);
 
@@ -350,18 +350,82 @@ test.describe("G08 — Visual + Accessibility", () => {
     await page.waitForLoadState("networkidle");
     await screenshot(page, "organizations", "Organizations", "ar", "desktop");
   });
+  // Arabic mobile screenshots for institutional pages (G08 Round 2)
+  test("signin page — Arabic mobile", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/ar/auth/signin");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "signin", "Sign-in", "ar", "mobile");
+  });
 
-  test("horizontal overflow check — no content exceeds viewport on mobile", async ({ browser }) => {
+  test("organizations — Arabic mobile (unauth redirects to signin)", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    // Unauthenticated visit — should redirect to /ar/auth/signin
+    await page.goto("/ar/organizations");
+    await page.waitForLoadState("networkidle");
+    // Capture whatever state we land on (signin redirect or list page)
+    await screenshot(page, "organizations-ar-mobile", "Organizations", "ar", "mobile");
+  });
+
+  test("admin dashboard — Arabic mobile (unauth redirects to signin)", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/ar/admin");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "admin-ar-mobile", "Admin Dashboard", "ar", "mobile");
+  });
+
+  test("organizations — English mobile (unauth redirects to signin)", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/en/organizations");
+    await page.waitForLoadState("networkidle");
+    await screenshot(page, "organizations-en-mobile", "Organizations", "en", "mobile");
+  });
+
+  test("horizontal overflow check — EN mobile home does not exceed 375px viewport", async ({ browser }) => {
     test.setTimeout(30000);
     const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
     const page = await ctx.newPage();
     await page.goto("/en");
     await page.waitForLoadState("networkidle");
-    // Check that the page doesn't have horizontal scrollbar
+    // Strict check: page must NOT have horizontal scroll on mobile viewport.
+    // If this fails, an element is wider than 375px — root cause must be fixed,
+    // not hidden with overflow-x-hidden.
     const hasHorizontalScroll = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
     });
-    console.log(`[G08] Mobile overflow: ${hasHorizontalScroll ? "YES" : "NO"}`);
+    expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("horizontal overflow check — AR mobile home does not exceed 375px viewport", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/ar");
+    await page.waitForLoadState("networkidle");
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("horizontal overflow check — EN mobile signin does not exceed 375px viewport", async ({ browser }) => {
+    test.setTimeout(30000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await page.goto("/en/auth/signin");
+    await page.waitForLoadState("networkidle");
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalScroll).toBe(false);
   });
 });
 

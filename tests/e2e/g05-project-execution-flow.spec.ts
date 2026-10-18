@@ -117,8 +117,8 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
       const memberPage = await memberCtx.newPage();
 
       // ── Setup: signup lead + member (fresh accounts, verified) ──
-      await signupAndVerify(leadPage, LEAD_EMAIL, "G05 Lead E2E");
-      await signupAndVerify(memberPage, MEMBER_EMAIL, "G05 Member E2E");
+      await signupAndVerify(leadPage, LEAD_EMAIL, "Project Lead");
+      await signupAndVerify(memberPage, MEMBER_EMAIL, "Project Member");
 
       const leadUserId = await getUserId(leadPage);
       const memberUserId = await getUserId(memberPage);
@@ -136,7 +136,7 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
       // ── Step 1: Lead creates + submits a proposal via API ──
       await signin(leadPage, LEAD_EMAIL, PASSWORD);
       const proposalRes = await apiCall(leadPage, "POST", "/api/proposals", {
-        title: `G05 E2E Project ${PREFIX}`,
+        title: `E2E Project ${PREFIX}`,
         charter: {
           problemStatement: "E2E test problem statement with sufficient length for validation purposes.",
           outcomes: "E2E test outcomes with sufficient length for validation purposes.",
@@ -156,7 +156,7 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
       await signin(reviewerPage, REVIEWER_EMAIL, REVIEWER_PASSWORD);
       const approveRes = await apiCall(reviewerPage, "POST", `/api/proposals/${proposalId}/review`, {
         action: "APPROVE",
-        reason: "E2E test approval for G05 acceptance evidence.",
+        reason: "E2E test approval for acceptance evidence.",
         stewardId: stewardUserId,
       });
       expect(approveRes.ok, `Approval failed: ${approveRes.error?.message}`).toBe(true);
@@ -189,7 +189,7 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
 
       // ── Step 6: Lead creates a milestone ──
       const milestoneRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/milestones`, {
-        title: "G05 E2E Milestone",
+        title: "E2E Milestone",
         description: "Milestone for the full team workflow E2E test.",
       });
       expect(milestoneRes.ok, `Milestone creation failed: ${milestoneRes.error?.message}`).toBe(true);
@@ -198,7 +198,7 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
 
       // ── Step 7: Lead creates a task — assigned to MEMBER (not self) ──
       const taskRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/tasks`, {
-        title: "G05 E2E Task",
+        title: "E2E Task",
         description: "Task for testing the full team workflow with an independent member.",
         assigneeId: memberUserId,
         milestoneId,
@@ -309,7 +309,7 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
 
       // ── Setup: signup lead + verify ──
       const selfLeadEmail = `${PREFIX}-self-lead@str-test.local`;
-      await signupAndVerify(leadPage, selfLeadEmail, "G05 Self-Review Lead");
+      await signupAndVerify(leadPage, selfLeadEmail, "Self Review Lead");
 
       const leadUserId = await getUserId(leadPage);
       expect(leadUserId).toBeTruthy();
@@ -323,7 +323,7 @@ test.describe("G05 — Project Execution Full E2E (Corrected Evidence)", () => {
       // ── Step 1: Lead creates + submits a proposal ──
       await signin(leadPage, selfLeadEmail, PASSWORD);
       const proposalRes = await apiCall(leadPage, "POST", "/api/proposals", {
-        title: `G05 Self-Review Test ${PREFIX}`,
+        title: `Self-Review Test ${PREFIX}`,
         charter: {
           problemStatement: "Self-review test problem statement with sufficient length for validation.",
           outcomes: "Self-review test outcomes with sufficient length for validation.",

@@ -106,9 +106,9 @@ test.describe("G07 — Integration Core Full E2E (with standalone worker)", () =
     await apiCall(adminPage, "POST", "/api/integrations/providers/str.mock.v1/approve", {});
 
     // Step 2: Lead signs up + creates a project
-    await signupAndVerify(leadPage, `${PREFIX}-lead@str-test.local`, "G07 Lead");
+    await signupAndVerify(leadPage, `${PREFIX}-lead@str-test.local`, "Integration User");
     const proposalRes = await apiCall(leadPage, "POST", "/api/proposals", {
-      title: `G07 E2E ${PREFIX}`,
+      title: `Integration E2E ${PREFIX}`,
       charter: {
         problemStatement: "E2E test problem statement with sufficient length for validation purposes.",
         outcomes: "E2E test outcomes with sufficient length for validation purposes.",
@@ -126,7 +126,7 @@ test.describe("G07 — Integration Core Full E2E (with standalone worker)", () =
     const stewardPage = await stewardCtx.newPage();
     await signin(stewardPage, "steward@str.platform.local", "StewardPass123!");
     const stewardUserId = await stewardPage.evaluate(async () => { const r = await fetch("/api/auth/session"); return (await r.json())?.user?.id ?? ""; });
-    const approveProposalRes = await apiCall(adminPage, "POST", `/api/proposals/${proposalId}/review`, { action: "APPROVE", reason: "Approved for G07 E2E test.", stewardId: stewardUserId });
+    const approveProposalRes = await apiCall(adminPage, "POST", `/api/proposals/${proposalId}/review`, { action: "APPROVE", reason: "Approved for E2E test.", stewardId: stewardUserId });
     expect(approveProposalRes.ok).toBe(true);
 
     const propDetailRes = await apiCall(adminPage, "GET", `/api/proposals/${proposalId}`);

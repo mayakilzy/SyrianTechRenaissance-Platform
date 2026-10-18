@@ -9,8 +9,8 @@ import { SiteFooter } from "@/components/shared/site-footer";
 import { CharterEditor } from "./CharterEditor";
 
 /**
- * STR G08 — Project Charter Editor (Structured Form + Live Preview)
- * Uses G03 charter revision schema + services for save/submit.
+ * STR Project Charter Editor (Structured Form + Live Preview)
+ * Per-proposal charter revision with live preview.
  */
 export default async function CharterPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;

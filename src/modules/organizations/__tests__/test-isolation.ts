@@ -44,7 +44,7 @@ export async function createTestUser(
   const user = await db.user.create({
     data: {
       email,
-      displayName: `G06 ${role} ${run.runId}`,
+      displayName: `${role} Testuser ${run.runId}`,
       locale: "ar",
       status: "ACTIVE",
       emailVerified: new Date(),
@@ -62,8 +62,8 @@ export async function createTestOrganization(
 ): Promise<string> {
   const org = await db.organization.create({
     data: {
-      legalName: `G06 Test Org ${run.runId}-${run.organizationIds.length}`,
-      displayName: `G06 Org ${run.runId}`,
+      legalName: `Test Org ${run.runId}-${run.organizationIds.length}`,
+      displayName: `Test Org ${run.runId}`,
       email: `g06-org-${run.runId}-${run.organizationIds.length}@test.local`,
       status,
       ...(status === "ACTIVE" ? { verifiedAt: new Date(), verifiedById: creatorId } : {}),

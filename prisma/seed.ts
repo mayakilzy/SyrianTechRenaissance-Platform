@@ -28,9 +28,9 @@ async function main() {
       id: "str.mock.v1",
       slug: "str.mock",
       version: "1.0.0",
-      displayName: "STR Mock Provider (G07 target)",
+      displayName: "STR Mock Provider",
       description:
-        "In-process mock provider used by G07 to exercise the integration core end-to-end. NOT callable in G01.",
+        "In-process mock provider for development and testing. Exercises the integration core end-to-end.",
       owner: "system",
       baseOrigin: "https://mock.local.str.platform",
       trustStatus: "registered",

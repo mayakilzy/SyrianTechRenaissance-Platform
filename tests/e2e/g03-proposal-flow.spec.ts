@@ -148,7 +148,7 @@ test.describe("G03 — Minimal step-by-step governance test", () => {
     // Step 1: Proposer signs up.
     const proposerCtx = await browser.newContext();
     const proposerPage = await proposerCtx.newPage();
-    await signupAndVerify(proposerPage, PROPOSER_EMAIL, "G03 Proposer");
+    await signupAndVerify(proposerPage, PROPOSER_EMAIL, "Member User One");
     await signin(proposerPage, PROPOSER_EMAIL, PASSWORD);
 
     // Step 2: Create a proposal via API — capture the REAL proposalId.
@@ -207,11 +207,11 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
     // ── Setup: create all users ──
     const proposerCtx = await browser.newContext();
     const proposerPage = await proposerCtx.newPage();
-    await signupAndVerify(proposerPage, PROPOSER_EMAIL, "G03 Proposer");
+    await signupAndVerify(proposerPage, PROPOSER_EMAIL, "Member User One");
 
     const inviteeCtx = await browser.newContext();
     const inviteePage = await inviteeCtx.newPage();
-    await signupAndVerify(inviteePage, INVITEE_EMAIL, "G03 Invitee");
+    await signupAndVerify(inviteePage, INVITEE_EMAIL, "Member User Invitee");
     await signin(inviteePage, INVITEE_EMAIL, PASSWORD);
     const inviteeId = await getUserId(inviteePage);
 
@@ -342,7 +342,7 @@ test.describe("G03 — Full Institutional Governance E2E", () => {
 
     const proposerCtx = await browser.newContext();
     const proposerPage = await proposerCtx.newPage();
-    await signupAndVerify(proposerPage, `${PREFIX}-proposer2@str-test.local`, "G03 Proposer 2");
+    await signupAndVerify(proposerPage, `${PREFIX}-proposer2@str-test.local`, "Member User Two");
     await signin(proposerPage, `${PREFIX}-proposer2@str-test.local`, PASSWORD);
 
     const proposalId = await createProposalViaAPI(proposerPage, "E2E Rejected Proposal");

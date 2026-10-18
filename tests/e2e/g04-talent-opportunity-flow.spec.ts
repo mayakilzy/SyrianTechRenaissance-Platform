@@ -64,11 +64,11 @@ test.describe("G04 — Talent & Opportunity Full E2E", () => {
     // ── Setup: create creator + applicant ──
     const creatorCtx = await browser.newContext();
     const creatorPage = await creatorCtx.newPage();
-    await signupAndVerify(creatorPage, CREATOR_EMAIL, "G04 Creator");
+    await signupAndVerify(creatorPage, CREATOR_EMAIL, "Project Creator");
 
     const applicantCtx = await browser.newContext();
     const applicantPage = await applicantCtx.newPage();
-    await signupAndVerify(applicantPage, APPLICANT_EMAIL, "G04 Applicant");
+    await signupAndVerify(applicantPage, APPLICANT_EMAIL, "Applicant User");
 
     // ── Step 1: Creator creates an opportunity via API ──
     await signin(creatorPage, CREATOR_EMAIL, PASSWORD);
@@ -77,7 +77,7 @@ test.describe("G04 — Talent & Opportunity Full E2E", () => {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: "E2E Test Opportunity",
-          description: "This is a test opportunity for the G04 E2E flow with sufficient length for validation.",
+          description: "Test opportunity with sufficient length for validation purposes.",
           type: "PROJECT",
           requirements: "React, TypeScript, Playwright",
           isRemote: true,

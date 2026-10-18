@@ -101,8 +101,8 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       await signin(adminPage, ADMIN_EMAIL, ADMIN_PASSWORD);
       const adminId = await getUserId(adminPage);
       const orgRes = await apiCall(adminPage, "POST", "/api/organizations", {
-        legalName: `G06 E2E Org ${PREFIX}`,
-        displayName: `G06 Org ${PREFIX}`,
+        legalName: `E2E Test Org ${PREFIX}`,
+        displayName: `Test Org ${PREFIX}`,
         email: `g06-org-${PREFIX}@str-test.local`,
       });
       expect(orgRes.ok, `Org registration failed: ${orgRes.error?.message}`).toBe(true);
@@ -114,7 +114,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       expect(verifyRes.data?.organization?.status).toBe("ACTIVE");
 
       // ── Step 2: Admin adds a representative (signup fresh user first) ──
-      await signupAndVerify(repPage, `${PREFIX}-rep@str-test.local`, "G06 Rep E2E");
+      await signupAndVerify(repPage, `${PREFIX}-rep@str-test.local`, "Org Representative");
       const repId = await getUserId(repPage);
       const addRepRes = await apiCall(adminPage, "POST", `/api/organizations/${orgId}/representatives`, {
         userId: repId,
@@ -181,8 +181,8 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       const adminPage = await adminCtx.newPage();
 
       // Setup: signup two fresh members (target + complainant)
-      await signupAndVerify(member1Page, `${PREFIX}-complainant@str-test.local`, "G06 Complainant");
-      await signupAndVerify(member2Page, `${PREFIX}-target@str-test.local`, "G06 Target");
+      await signupAndVerify(member1Page, `${PREFIX}-complainant@str-test.local`, "Complainant User");
+      await signupAndVerify(member2Page, `${PREFIX}-target@str-test.local`, "Target User");
       const complainantId = await getUserId(member1Page);
       const targetId = await getUserId(member2Page);
 
@@ -266,7 +266,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
 
       // Create two orgs + two reps
       const orgARes = await apiCall(adminPage, "POST", "/api/organizations", {
-        legalName: `G06 Isolation Org A ${PREFIX}`,
+        legalName: `Test Org Alpha ${PREFIX}`,
         displayName: `Org A ${PREFIX}`,
         email: `g06-iso-a-${PREFIX}@str-test.local`,
       });
@@ -274,7 +274,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       await apiCall(adminPage, "POST", `/api/organizations/${orgAId}/verify`, {});
 
       const orgBRes = await apiCall(adminPage, "POST", "/api/organizations", {
-        legalName: `G06 Isolation Org B ${PREFIX}`,
+        legalName: `Test Org Beta ${PREFIX}`,
         displayName: `Org B ${PREFIX}`,
         email: `g06-iso-b-${PREFIX}@str-test.local`,
       });
@@ -284,7 +284,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       // Rep A signs up + is added to org A
       const repACtx = await browser.newContext();
       const repAPage = await repACtx.newPage();
-      await signupAndVerify(repAPage, `${PREFIX}-iso-rep-a@str-test.local`, "G06 Iso Rep A");
+      await signupAndVerify(repAPage, `${PREFIX}-iso-rep-a@str-test.local`, "Representative Alpha");
       const repAId = await getUserId(repAPage);
       await apiCall(adminPage, "POST", `/api/organizations/${orgAId}/representatives`, {
         userId: repAId,
