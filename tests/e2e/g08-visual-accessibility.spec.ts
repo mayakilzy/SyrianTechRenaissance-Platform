@@ -532,5 +532,31 @@ test.describe("G08 — Visual + Accessibility", () => {
     });
     expect(hasHorizontalScroll).toBe(false);
   });
+
+  test("horizontal overflow check — EN mobile opportunities (authenticated) does not exceed 375px viewport", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/en/opportunities");
+    await page.waitForLoadState("networkidle");
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("horizontal overflow check — AR mobile opportunities (authenticated) does not exceed 375px viewport", async ({ browser }) => {
+    test.setTimeout(60000);
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 667 } });
+    const page = await ctx.newPage();
+    await signin(page, "member@str.platform.local", "MemberPass123!");
+    await page.goto("/ar/opportunities");
+    await page.waitForLoadState("networkidle");
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalScroll).toBe(false);
+  });
 });
 

@@ -52,7 +52,7 @@ export default async function OpportunitiesPage({ params, searchParams }: {
             <div className="space-y-3">
               {myOpps.map(o => (
                 <Card key={o.id}>
-                  <CardHeader className="flex flex-row items-center justify-between">
+                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <CardTitle className="text-lg">{o.title}</CardTitle>
                     <div className="flex gap-2">
                       <Badge variant="outline">{o._count.applications} {t("applications")}</Badge>
@@ -74,7 +74,7 @@ export default async function OpportunitiesPage({ params, searchParams }: {
             <div className="space-y-3">
               {published.results.map(o => (
                 <Card key={o.id}>
-                  <CardHeader className="flex flex-row items-center justify-between">
+                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <CardTitle className="text-lg">{o.title}</CardTitle>
                     <Badge variant="outline">{o.type}</Badge>
                   </CardHeader>
