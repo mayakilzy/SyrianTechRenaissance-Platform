@@ -41,7 +41,7 @@ async function setupProjectWithProvider() {
     },
   });
   await submitProposal(proposal.id, leadId);
-  await reviewProposal({ proposalId: proposal.id, reviewerId: adminId, action: "APPROVE", reason: "OK", stewardId });
+  await reviewProposal({ proposalId: proposal.id, reviewerId: adminId, action: "APPROVE", reason: "Approved for G07 webhook worker tests.", stewardId });
   const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
   if (!project) throw new Error("Project not created");
   run.proposalIds.push(proposal.id);
