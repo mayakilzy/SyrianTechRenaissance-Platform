@@ -40,7 +40,6 @@ model User {
 
   authIdentities          AuthIdentity[]
   auditEvents             AuditEvent[]
-  connections             IntegrationConnection[]
   initiatedJobs           IntegrationJob[]         @relation("JobInitiator")
   consentRecords          ConsentRecord[]
   emailVerifications      EmailVerification[]
