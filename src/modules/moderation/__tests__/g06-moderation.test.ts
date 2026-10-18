@@ -254,12 +254,13 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
       body: "This is the offensive content that should be removed from view.",
     });
 
-    // File a complaint targeting the specific message
-    const complaint = await fileComplaint(memberId, {
+    // File a complaint targeting the specific message — complainant is the lead
+    // (NOT the member who posted the offending content, to avoid self-complaint guard)
+    const complaint = await fileComplaint(leadId, {
       projectId: project.id,
       threadId: thread.id,
       targetMessageId: offendingMessage.id,
-      targetUserId: memberId,
+      targetUserId: memberId, // the member who posted the offending content
       reason: "The message above contains offensive content that should be removed from public view.",
       evidenceText: "This is the offensive content that was quoted as evidence.",
     });
