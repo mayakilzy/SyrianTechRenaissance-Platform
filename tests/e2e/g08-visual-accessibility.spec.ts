@@ -318,6 +318,7 @@ test.describe("G08 — Visual + Accessibility", () => {
     // Verify submit button is keyboard accessible
     const submitBtn = page.locator('button[type="submit"]');
     await expect(submitBtn).toBeVisible();
+  });
   
 
   test("proposals list — Arabic desktop", async ({ browser }) => {
@@ -364,4 +365,3 @@ test.describe("G08 — Visual + Accessibility", () => {
   });
 });
 
-}
