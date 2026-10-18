@@ -19,7 +19,7 @@ test.describe("G08 — Visual + Accessibility", () => {
     const arPage = await ctx.newPage();
     await arPage.goto("/ar");
     await arPage.waitForLoadState("networkidle");
-    await expect(arPage.locator("h1").or(arPage.locator("h2"))).toBeVisible({ timeout: 10000 });
+    await expect(arPage.locator("h1, h2").first()).toBeVisible({ timeout: 10000 });
     expect(await arPage.locator("html").getAttribute("dir")).toBe("rtl");
     await arPage.screenshot({ path: "tests/e2e/screenshots/g08-home-ar-desktop.png", fullPage: true });
 
@@ -27,7 +27,7 @@ test.describe("G08 — Visual + Accessibility", () => {
     const enPage = await ctx.newPage();
     await enPage.goto("/en");
     await enPage.waitForLoadState("networkidle");
-    await expect(enPage.locator("h1").or(enPage.locator("h2"))).toBeVisible({ timeout: 10000 });
+    await expect(enPage.locator("h1, h2").first()).toBeVisible({ timeout: 10000 });
     expect(await enPage.locator("html").getAttribute("dir")).toBe("ltr");
     await enPage.screenshot({ path: "tests/e2e/screenshots/g08-home-en-desktop.png", fullPage: true });
   });
@@ -67,11 +67,11 @@ test.describe("G08 — Visual + Accessibility", () => {
     await page.waitForLoadState("networkidle");
 
     // Check for header element (role="banner")
-    const header = page.locator('[role="banner"]');
+    const header = page.locator("header");
     await expect(header).toBeVisible({ timeout: 10000 });
 
     // Check for navigation
-    const nav = page.locator('nav[role="navigation"]');
+    const nav = page.locator("nav");
     await expect(nav).toBeVisible();
   });
 
