@@ -39,3 +39,6 @@ ALTER TABLE "IntegrationProvider" ADD CONSTRAINT "IntegrationProvider_approvedBy
 
 -- 5. FK for cancelledById (references User, SET NULL on delete)
 ALTER TABLE "IntegrationJob" ADD CONSTRAINT "IntegrationJob_cancelledById_fkey" FOREIGN KEY ("cancelledById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 6. Drop the subjectId FK to User (polymorphic — subjectKind determines the table)
+ALTER TABLE "IntegrationConnection" DROP CONSTRAINT IF EXISTS "IntegrationConnection_subjectId_fkey";

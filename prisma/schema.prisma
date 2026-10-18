@@ -242,7 +242,9 @@ model IntegrationConnection {
   suspendedReason      String?   @db.Text
 
   provider       IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  user           User?               @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  // G07: subjectId is polymorphic (subjectKind: "user" | "project" | "organization")
+  // No FK constraint — the subjectKind field determines which table to reference.
+  // This prevents FK violations when subjectId is a projectId (not a userId).
   jobs           IntegrationJob[]
   consentRecords ConsentRecord[]
 
