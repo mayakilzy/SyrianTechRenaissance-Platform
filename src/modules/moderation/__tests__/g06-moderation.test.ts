@@ -372,16 +372,21 @@ describe("G06-B — CONTENT_REMOVED preserves original (no deletion)", () => {
       body: "Offending content in thread B — but the complaint is about thread A.",
     });
 
-    // File a complaint about thread A but with targetMessageId pointing to thread B's message
+    // File a complaint about thread A WITHOUT targetMessageId (so filing succeeds),
+    // then manually set targetMessageId to thread B's message (creating a mismatch)
     const complaint = await fileComplaint(leadId, {
       projectId: project.id,
       threadId: threadA.id, // complaint is about thread A
-      targetMessageId: messageB.id, // but target message is in thread B — MISMATCH
       targetUserId: leadId,
-      reason: "Complaint with a mismatched targetMessageId — should be rejected for CONTENT_REMOVED.",
+      reason: "Complaint that will have a mismatched targetMessageId set after filing.",
+    });
+    // Manually set targetMessageId to a message in thread B (mismatch with thread A)
+    await db.moderationComplaint.update({
+      where: { id: complaint.id },
+      data: { targetMessageId: messageB.id }, // message B is in thread B, not thread A
     });
 
-    // Moderator tries CONTENT_REMOVED — must fail (mismatch)
+    // Moderator tries CONTENT_REMOVED — must fail (mismatch between targetMessageId and threadId)
     await expect(
       decideComplaint(complaint.id, modId, {
         action: "CONTENT_REMOVED",
