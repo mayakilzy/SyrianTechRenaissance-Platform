@@ -155,25 +155,25 @@ async function main() {
   // G06 — Institutional roles: admin, partnership_manager, moderator
   const adminHash = await hashPassword("AdminPass123!");
   await prisma.user.upsert({
-    where: { email: "admin@str.platform.local" },
+    where: { email: "test-admin@str.platform.local" },
     update: {
       status: "ACTIVE",
       emailVerified: new Date(),
       authIdentities: {
         upsert: {
-          where: { provider_providerSub: { provider: "password", providerSub: "admin@str.platform.local" } },
+          where: { provider_providerSub: { provider: "password", providerSub: "test-admin@str.platform.local" } },
           update: { passwordHash: adminHash },
           create: {
             provider: "password",
-            providerSub: "admin@str.platform.local",
-            emailAtLink: "admin@str.platform.local",
+            providerSub: "test-admin@str.platform.local",
+            emailAtLink: "test-admin@str.platform.local",
             passwordHash: adminHash,
           },
         },
       },
     },
     create: {
-      email: "admin@str.platform.local",
+      email: "test-admin@str.platform.local",
       displayName: "STR Admin (test)",
       locale: "ar",
       status: "ACTIVE",
@@ -188,8 +188,8 @@ async function main() {
       authIdentities: {
         create: {
           provider: "password",
-          providerSub: "admin@str.platform.local",
-          emailAtLink: "admin@str.platform.local",
+          providerSub: "test-admin@str.platform.local",
+          emailAtLink: "test-admin@str.platform.local",
           passwordHash: adminHash,
         },
       },

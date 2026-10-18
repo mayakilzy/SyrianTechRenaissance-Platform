@@ -19,7 +19,7 @@ import { test, expect } from "@playwright/test";
  *    - Target user can see complaint against them (transparency)
  */
 
-const ADMIN_EMAIL = "admin@str.platform.local";
+const ADMIN_EMAIL = "test-admin@str.platform.local";
 const ADMIN_PASSWORD = "AdminPass123!";
 const PM_EMAIL = "partnership_manager@str.platform.local";
 const PM_PASSWORD = "PartnershipManagerPass123!";
