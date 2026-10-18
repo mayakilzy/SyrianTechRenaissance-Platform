@@ -240,13 +240,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       expect(suspendRes.ok, `Admin suspend failed: ${suspendRes.error?.message}`).toBe(true);
 
       // ── Step 6: Anti-self-suspension — admin cannot suspend their own account ──
-      const complaint3Res = await apiCall(member1Page, "POST", "/api/moderation/complaints", {
-        targetUserId: adminId ?? "unknown",
-        reason: "Complaint against the admin themselves — admin should not be able to self-suspend.",
-      });
-      const complaint3Id = complaint3Res.data?.complaint?.id;
       const adminIdValue = await getUserId(adminPage);
-      // Need to file complaint with targetUserId = admin
       const complaint4Res = await apiCall(member1Page, "POST", "/api/moderation/complaints", {
         targetUserId: adminIdValue,
         reason: "Complaint against the admin themselves — admin should not be able to self-suspend.",
