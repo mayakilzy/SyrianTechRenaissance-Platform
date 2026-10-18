@@ -46,7 +46,7 @@ async function signin(page: import("@playwright/test").Page, email: string, pass
   await page.fill('[name="email"]', email);
   await page.fill('[name="password"]', password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/(dashboard|en\/dashboard)/, { timeout: 30000 }).catch(() => {});
+  await page.waitForURL(/\/dashboard/, { timeout: 30000 });
 }
 
 
