@@ -78,6 +78,8 @@ async function setupProject() {
   });
   const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
   if (!project) throw new Error("Project not created");
+  run.proposalIds.push(proposal.id);
+  run.projectIds.push(project.id);
   return { projectId: project.id, leadId, stewardId };
 }
 

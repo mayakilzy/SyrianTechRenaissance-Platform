@@ -265,7 +265,7 @@ describe("G06-A — Withdraw", () => {
     const { repId, orgId } = await setupActiveOrgWithVerifiedRep();
     const req = await submitPartnershipRequest(repId, {
       organizationId: orgId,
-      proposalText: "Request that the requester will withdraw.",
+      proposalText: "Request that the requester will withdraw from after submission with sufficient length.",
     });
     const result = await withdrawPartnershipRequest(req.id, repId);
     expect(result.status).toBe("WITHDRAWN");
