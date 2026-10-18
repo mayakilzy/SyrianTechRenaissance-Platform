@@ -1187,6 +1187,7 @@ model ProjectThread {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator   User    @relation("ThreadCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   messages  ThreadMessage[]
+  moderationComplaints ModerationComplaint[]
 
   @@index([projectId])
   @@index([updatedAt])
