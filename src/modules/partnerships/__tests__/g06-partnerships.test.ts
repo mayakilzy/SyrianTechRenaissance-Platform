@@ -337,6 +337,8 @@ describe("G06-A — Rights declarations (NOT IP transfer)", () => {
         status: "ACTIVE",
       },
     });
+    run.proposalIds.push(proposal.id);
+    run.projectIds.push(project.id);
     const team = await db.team.create({ data: { projectId: project.id, name: `Team ${run.runId}` } });
     await db.teamMembership.create({ data: { teamId: team.id, userId: contributorId, role: "LEAD" } });
     const task = await db.task.create({
@@ -387,6 +389,8 @@ describe("G06-A — Rights declarations (NOT IP transfer)", () => {
     const project = await db.project.create({
       data: { proposalId: proposal.id, leadId: contributorId, stewardId: adminId, title: `Test ${run.runId}`, status: "ACTIVE" },
     });
+    run.proposalIds.push(proposal.id);
+    run.projectIds.push(project.id);
     const team = await db.team.create({ data: { projectId: project.id, name: `T ${run.runId}` } });
     await db.teamMembership.create({ data: { teamId: team.id, userId: contributorId, role: "LEAD" } });
     const task = await db.task.create({
@@ -417,6 +421,8 @@ describe("G06-A — Rights declarations (NOT IP transfer)", () => {
     const project = await db.project.create({
       data: { proposalId: proposal.id, leadId: contributorId, stewardId: adminId, title: `T ${run.runId}`, status: "ACTIVE" },
     });
+    run.proposalIds.push(proposal.id);
+    run.projectIds.push(project.id);
     const team = await db.team.create({ data: { projectId: project.id, name: `T ${run.runId}` } });
     await db.teamMembership.create({ data: { teamId: team.id, userId: contributorId, role: "LEAD" } });
     const task = await db.task.create({
