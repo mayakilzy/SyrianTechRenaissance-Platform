@@ -25,22 +25,17 @@ function recordScreenshot(file: string, page: string, locale: string, viewport: 
   }
 }
 
-// After all tests: scan the screenshots directory for actual files
-// and build a reliable manifest from the filesystem
-test.afterAll(async () => {
-  mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+// After all tests: build manifest from actual files on disk
+test.afterAll(() => {
   try {
-    const { readdirSync } = await import("node:fs");
+    mkdirSync(SCREENSHOTS_DIR, { recursive: true });
     const files = readdirSync(SCREENSHOTS_DIR);
-    const metaFiles = files.filter(f => f.endsWith(".meta.json"));
-    const manifest = metaFiles.map(f => {
-      try {
-        return JSON.parse(readFileSync(join(SCREENSHOTS_DIR, f), "utf-8"));
-      } catch { return null; }
+    const manifest = files.filter(f => f.endsWith(".meta.json")).map(f => {
+      try { return JSON.parse(readFileSync(join(SCREENSHOTS_DIR, f), "utf-8")); } catch { return null; }
     }).filter(Boolean);
     writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
-  } catch (e) {
-    // Best-effort: screenshots themselves are the primary evidence
+  } catch {
+    // Best-effort
   }
 });
 
