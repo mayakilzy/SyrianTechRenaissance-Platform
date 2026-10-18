@@ -10,7 +10,21 @@
     "fields": "المجالات",
     "opportunities": "الفرص",
     "join": "انضم إلينا",
-    "contact": "تواصل"
+    "contact": "تواصل",
+    "dashboard": "لوحة التحكم",
+    "proposals": "المقترحات",
+    "projects": "المشاريع",
+    "talent": "المواهب",
+    "organizations": "المنظمات",
+    "partnerships": "الشراكات",
+    "moderation": "الإشراف",
+    "integrations": "التكاملات",
+    "admin": "الإدارة",
+    "contributions": "مساهماتي",
+    "applications": "طلباتي",
+    "signin": "تسجيل الدخول",
+    "signout": "تسجيل الخروج",
+    "language": "اللغة"
   },
   "home": {
     "heroTitle": "نبني القدرة، ونصنع الفرصة",
@@ -278,7 +292,11 @@
     "userSuspended": "مستخدم معلَّق",
     "dismiss": "رفض",
     "escalate": "تصعيد",
-    "status": "الحالة"
+    "status": "الحالة",
+    "fileComplaint": "تقديم شكوى",
+    "decide": "اتخاذ قرار",
+    "noComplaints": "لا توجد شكاوى",
+    "queue": "طابور الإشراف"
   },
   "admin": {
     "dashboard": "لوحة الإدارة",
@@ -288,7 +306,9 @@
     "partnerships": "الشراكات",
     "moderation": "الإشراف",
     "audit": "سجل التدقيق",
-    "suspensions": "التعليقات"
+    "suspensions": "التعليقات",
+    "grants": "المنح",
+    "teams": "الفرق"
   },
   "threads": {
     "title": "المحادثات",
@@ -296,13 +316,39 @@
     "messages": "الرسائل",
     "createThread": "إنشاء محادثة",
     "postMessage": "نشر رسالة",
-    "close": "إغلاق"
+    "close": "إغلاق",
+    "closeThread": "إغلاق المحادثة",
+    "noThreads": "لا توجد محادثات بعد",
+    "closed": "مغلقة"
   },
   "impact": {
     "title": "سجلات الأثر",
     "metric": "المؤشر",
     "value": "القيمة",
     "evidenceUrl": "رابط الدليل",
-    "record": "تسجيل"
+    "record": "تسجيل",
+    "noRecords": "لا توجد سجلات أثر بعد"
+  },
+  "ui": {
+    "loading": "جارٍ التحميل...",
+    "empty": "لا توجد بيانات",
+    "error": "حدث خطأ",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "submit": "إرسال",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "create": "إنشاء",
+    "back": "رجوع",
+    "next": "التالي",
+    "search": "بحث",
+    "filter": "تصفية",
+    "all": "الكل",
+    "none": "لا شيء",
+    "comingSoon": "قريباً",
+    "academy": "أكاديمية النهضة التقنية",
+    "engineering": "منظومة الهندسة",
+    "academyNote": "قسم الأكاديمية قادم لاحقاً",
+    "engineeringNote": "منظومة الهندسة قادمة لاحقاً"
   }
 }

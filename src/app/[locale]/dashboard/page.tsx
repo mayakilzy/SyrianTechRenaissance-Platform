@@ -37,7 +37,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
+      <SiteHeader />>
       <div className="container mx-auto px-4 sm:px-6 py-8">
         <Card>
           <CardHeader>
@@ -61,6 +64,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      <SiteFooter />
     </div>
   );
 }

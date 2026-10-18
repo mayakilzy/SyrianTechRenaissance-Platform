@@ -174,6 +174,7 @@ export default async function HomePage({
           <p>{tFooter("builtWith")}</p>
         </div>
       </footer>
+    <SiteFooter />
     </div>
   );
 }

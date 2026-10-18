@@ -10,7 +10,21 @@
     "fields": "Fields",
     "opportunities": "Opportunities",
     "join": "Join",
-    "contact": "Contact"
+    "contact": "Contact",
+    "dashboard": "Dashboard",
+    "proposals": "Proposals",
+    "projects": "Projects",
+    "talent": "Talent",
+    "organizations": "Organizations",
+    "partnerships": "Partnerships",
+    "moderation": "Moderation",
+    "integrations": "Integrations",
+    "admin": "Admin",
+    "contributions": "My Contributions",
+    "applications": "My Applications",
+    "signin": "Sign in",
+    "signout": "Sign out",
+    "language": "Language"
   },
   "home": {
     "heroTitle": "Building Capability, Creating Opportunity",
@@ -278,7 +292,11 @@
     "userSuspended": "User suspended",
     "dismiss": "Dismiss",
     "escalate": "Escalate",
-    "status": "Status"
+    "status": "Status",
+    "fileComplaint": "File complaint",
+    "decide": "Decide",
+    "noComplaints": "No complaints",
+    "queue": "Moderation queue"
   },
   "admin": {
     "dashboard": "Admin Dashboard",
@@ -288,7 +306,9 @@
     "partnerships": "Partnerships",
     "moderation": "Moderation",
     "audit": "Audit log",
-    "suspensions": "Suspensions"
+    "suspensions": "Suspensions",
+    "grants": "Grants",
+    "teams": "Teams"
   },
   "threads": {
     "title": "Threads",
@@ -296,13 +316,39 @@
     "messages": "Messages",
     "createThread": "Create thread",
     "postMessage": "Post message",
-    "close": "Close"
+    "close": "Close",
+    "closeThread": "Close thread",
+    "noThreads": "No threads yet",
+    "closed": "Closed"
   },
   "impact": {
     "title": "Impact Records",
     "metric": "Metric",
     "value": "Value",
     "evidenceUrl": "Evidence URL",
-    "record": "Record"
+    "record": "Record",
+    "noRecords": "No impact records yet"
+  },
+  "ui": {
+    "loading": "Loading...",
+    "empty": "No data available",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "none": "None",
+    "comingSoon": "Coming soon",
+    "academy": "STR Academy",
+    "engineering": "Engineering Ecosystem",
+    "academyNote": "Academy section coming soon",
+    "engineeringNote": "Engineering Ecosystem coming soon"
   }
 }
