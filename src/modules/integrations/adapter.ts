@@ -38,9 +38,13 @@ export interface JobExecutionParams {
  * Webhook verification parameters.
  */
 export interface WebhookVerifyParams {
-  headers: Record<string, string>;
   body: string;                 // raw body (for HMAC)
-  secret: string;              // the connection's signing secret (plaintext, from key manager)
+  secret: string;              // the connection's signing secret (decrypted)
+  // G07: HMAC must include timestamp + eventId + connectionId + body
+  // to prevent timestamp tampering with a valid signature.
+  timestamp: string;
+  eventId: string;
+  connectionId: string;
 }
 
 /**

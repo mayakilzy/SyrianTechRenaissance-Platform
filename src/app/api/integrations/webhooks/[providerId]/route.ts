@@ -69,7 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     const signatureValid = await mockAdapter.verifyWebhook({
       headers,
       body,
-      secret: actualSecret, // the DECRYPTED signing secret
+      secret: actualSecret,
+      timestamp,
+      eventId: providerEventId,
+      connectionId,
     });
 
     // FAIL CLOSED: reject if signature is invalid

@@ -344,28 +344,32 @@ export async function submitJob(submitterId: string, input: JobSubmitInput) {
     // Idempotent: return the existing job (don't create a duplicate)
     return existing;
   }
-  // Create the job
-  const job = await db.integrationJob.create({
-    data: {
-      connectionId: conn.id,
-      capability: valid.data.capability,
-      initiatorId: submitterId,
-      subjectKind: conn.subjectKind,
-      subjectId: conn.subjectId,
-      status: "queued",
-      idempotencyKey: valid.data.idempotencyKey,
-      payload: valid.data.payload as never,
-      timeoutMs: capability.timeoutMs,
-    },
-  });
-  // Create an OutboxEvent for the worker to pick up
-  await db.outboxEvent.create({
-    data: {
-      aggregate: "integration.job",
-      aggregateId: job.id,
-      type: "integration.job.submitted",
-      payload: { jobId: job.id, capability: valid.data.capability },
-    },
+  // CRITICAL: Create the job + OutboxEvent ATOMICALLY in one transaction.
+  // If either fails, both are rolled back — no orphaned 'queued' job without
+  // an OutboxEvent (which would make the job unprocessable by the worker).
+  const job = await db.$transaction(async (tx) => {
+    const j = await tx.integrationJob.create({
+      data: {
+        connectionId: conn.id,
+        capability: valid.data.capability,
+        initiatorId: submitterId,
+        subjectKind: conn.subjectKind,
+        subjectId: conn.subjectId,
+        status: "queued",
+        idempotencyKey: valid.data.idempotencyKey,
+        payload: valid.data.payload as never,
+        timeoutMs: capability.timeoutMs,
+      },
+    });
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: "integration.job",
+        aggregateId: j.id,
+        type: "integration.job.submitted",
+        payload: { jobId: j.id, capability: valid.data.capability } as never,
+      },
+    });
+    return j;
   });
   logger.info("integrations.job.submitted", { jobId: job.id, connectionId: conn.id, capability: valid.data.capability });
   return job;
@@ -374,7 +378,42 @@ export async function submitJob(submitterId: string, input: JobSubmitInput) {
 export async function getJob(jobId: string, actorId: string) {
   const job = await db.integrationJob.findUnique({
     where: { id: jobId },
-    include: { connection: true },
+    // CRITICAL: Use explicit select to EXCLUDE webhookSecret and webhookSecretHash
+    // from the connection. Never expose secret data (even encrypted) via job APIs.
+    select: {
+      id: true,
+      connectionId: true,
+      capability: true,
+      initiatorId: true,
+      subjectKind: true,
+      subjectId: true,
+      status: true,
+      idempotencyKey: true,
+      payload: true,
+      result: true,
+      failureCategory: true,
+      failureMessage: true,
+      retryable: true,
+      createdAt: true,
+      queuedAt: true,
+      startedAt: true,
+      finishedAt: true,
+      timeoutMs: true,
+      cancelReason: true,
+      // connection: only non-sensitive fields (NO webhookSecret, NO webhookSecretHash)
+      connection: {
+        select: {
+          id: true,
+          providerId: true,
+          subjectKind: true,
+          subjectId: true,
+          status: true,
+          scopes: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
   });
   if (!job) throw new NotFoundError("Job not found");
   // Cross-project isolation: verify the actor is a project participant

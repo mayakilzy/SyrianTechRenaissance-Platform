@@ -83,12 +83,16 @@ class MockAdapter implements IntegrationAdapter {
 
   async verifyWebhook(params: WebhookVerifyParams): Promise<boolean> {
     // HMAC-SHA256 verification with constant-time comparison
+    // CRITICAL: The signature covers timestamp + eventId + connectionId + body
+    // This prevents an attacker from changing the timestamp while keeping a valid signature.
     const signature = params.headers["x-str-signature"] || params.headers["X-STR-Signature"];
     if (!signature) return false;
 
-    // Compute expected signature
+    // Compute expected signature over the canonical form:
+    // timestamp\neventId\nconnectionId\nbody
+    const canonicalString = `${params.timestamp}\n${params.eventId}\n${params.connectionId}\n${params.body}`;
     const expectedSignature = createHmac("sha256", params.secret)
-      .update(params.body)
+      .update(canonicalString)
       .digest("hex");
 
     // Constant-time comparison to prevent timing attacks
