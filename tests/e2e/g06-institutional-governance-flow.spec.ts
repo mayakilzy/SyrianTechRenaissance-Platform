@@ -29,6 +29,9 @@ const MEMBER_EMAIL = "member@str.platform.local";
 const MEMBER_PASSWORD = "MemberPass123!";
 
 const PREFIX = `g06e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+// Short stable ID for org emails (displayed on org cards).
+// PREFIX is preserved for user emails (not displayed on org cards).
+const SHORT_ID = Date.now().toString(36);
 const PASSWORD = "TestPassword123!";
 
 interface ApiResult<T = unknown> {
@@ -103,7 +106,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       const orgRes = await apiCall(adminPage, "POST", "/api/organizations", {
         legalName: "E2E Test Org",
         displayName: "Test Org",
-        email: `g06-org-${PREFIX}@str-test.local`,
+        email: `org.${SHORT_ID}@str-test.local`,
       });
       expect(orgRes.ok, `Org registration failed: ${orgRes.error?.message}`).toBe(true);
       const orgId = orgRes.data?.organization?.id;
@@ -268,7 +271,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       const orgARes = await apiCall(adminPage, "POST", "/api/organizations", {
         legalName: "Test Org Alpha",
         displayName: "Org A",
-        email: `g06-iso-a-${PREFIX}@str-test.local`,
+        email: `iso-a.${SHORT_ID}@str-test.local`,
       });
       const orgAId = orgARes.data?.organization?.id;
       await apiCall(adminPage, "POST", `/api/organizations/${orgAId}/verify`, {});
@@ -276,7 +279,7 @@ test.describe("G06 — Institutional Governance Full E2E", () => {
       const orgBRes = await apiCall(adminPage, "POST", "/api/organizations", {
         legalName: "Test Org Beta",
         displayName: "Org B",
-        email: `g06-iso-b-${PREFIX}@str-test.local`,
+        email: `iso-b.${SHORT_ID}@str-test.local`,
       });
       const orgBId = orgBRes.data?.organization?.id;
       await apiCall(adminPage, "POST", `/api/organizations/${orgBId}/verify`, {});
