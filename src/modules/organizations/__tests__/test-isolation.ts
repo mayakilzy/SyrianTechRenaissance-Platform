@@ -12,6 +12,8 @@ export interface TestRun {
   userIds: string[];
   organizationIds: string[];
   partnershipRequestIds: string[];
+  projectIds: string[];
+  proposalIds: string[];
 }
 
 export function startTestRun(): TestRun {
@@ -20,6 +22,8 @@ export function startTestRun(): TestRun {
     userIds: [],
     organizationIds: [],
     partnershipRequestIds: [],
+    projectIds: [],
+    proposalIds: [],
   };
 }
 
@@ -89,6 +93,21 @@ export async function createTestRepresentative(
 }
 
 export async function cleanupTestRun(run: TestRun): Promise<void> {
+  // Delete projects + their child entities first (cascade handles children)
+  if (run.projectIds.length > 0) {
+    // Project cascades: milestones, tasks, deliverables, contributions, threads, etc.
+    // But we need to handle G06 entities that reference projects too
+    await db.moderationComplaint.deleteMany({ where: { projectId: { in: run.projectIds } } });
+    await db.impactRecord.deleteMany({ where: { projectId: { in: run.projectIds } } });
+    await db.partnershipRequest.deleteMany({ where: { projectId: { in: run.projectIds } } });
+    await db.projectThread.deleteMany({ where: { projectId: { in: run.projectIds } } });
+    await db.project.deleteMany({ where: { id: { in: run.projectIds } } });
+  }
+  if (run.proposalIds.length > 0) {
+    await db.reviewDecision.deleteMany({ where: { proposalId: { in: run.proposalIds } } });
+    await db.charterRevision.deleteMany({ where: { proposalId: { in: run.proposalIds } } });
+    await db.projectProposal.deleteMany({ where: { id: { in: run.proposalIds } } });
+  }
   if (run.partnershipRequestIds.length > 0) {
     await db.contributionRightsDeclaration.deleteMany({
       where: { contribution: { deliverable: { task: { project: { partnershipRequests: { some: { id: { in: run.partnershipRequestIds } } } } } } } },
