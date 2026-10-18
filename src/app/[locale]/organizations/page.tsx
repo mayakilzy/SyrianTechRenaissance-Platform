@@ -46,7 +46,7 @@ export default async function OrganizationsPage({ params }: { params: Promise<{ 
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:gap-4">
             {organizations.map((org) => (
               <Link key={org.id} href={`/${locale}/organizations/${org.id}`}>
                 <Card>

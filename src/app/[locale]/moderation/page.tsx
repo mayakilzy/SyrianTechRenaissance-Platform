@@ -34,7 +34,7 @@ export default async function ModerationPage({ params }: { params: Promise<{ loc
             {locale === "ar" ? "لا توجد شكاوى، أو ليس لديك صلاحية." : "No complaints, or you lack access."}
           </CardContent></Card>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:gap-4">
             {complaints.map((c) => (
               <Link key={c.id} href={`/${locale}/moderation/${c.id}`}>
                 <Card><CardContent className="pt-6 flex items-center justify-between">

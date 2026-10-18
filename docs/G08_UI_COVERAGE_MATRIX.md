@@ -59,3 +59,31 @@
 - Charter Editor: structured form + live preview (fixed endpoint to /revise)
 - i18n: 314 keys per language (no raw keys)
 - Home + Dashboard: header + footer + flex layout
+
+
+## G08 Final Assessment (Honest)
+
+### What was completed:
+- SiteHeader + SiteFooter on 12 pages (home, dashboard, proposals, opportunities, organizations, moderation, partnerships, integrations, charter editor)
+- Responsive navigation (mobile hamburger menu) on all pages with header
+- i18n: 314 keys per language (ar+en) across 19 namespaces — no raw keys
+- Charter editor: structured form + live preview + save via /revise endpoint
+- Loading/Empty/Error shared components created and available
+- Responsive grid added to organizations, partnerships, moderation, integrations
+- E2E tests: screenshots (15+ images), keyboard nav, form labels, heading hierarchy, landmarks
+- axe-core scan via CDN injection on home page EN desktop
+- Charter save E2E: mandatory save button visibility + edit + click + reload + verify persisted
+
+### What remains (honest):
+- 15/33 pages still need content-level responsive improvements (have header but inner content not mobile-optimized)
+- 21/33 pages have partial loading/empty/error states (shared components exist but not wired to all pages)
+- axe-core runs only on 1 page (home EN desktop) — full audit deferred to G09
+- Screenshots are English desktop-dominant (some Arabic + mobile coverage, but not comprehensive)
+- No tablet viewport screenshots
+
+### Deferred to G09/G10:
+- Full WCAG 2.2 AA automated audit (all pages, all viewports)
+- All 33 pages fully responsive (content-level mobile optimization)
+- All 33 pages with complete loading/empty/error states
+- VLM-based visual review
+- Production accessibility hardening

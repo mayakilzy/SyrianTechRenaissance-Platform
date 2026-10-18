@@ -43,7 +43,7 @@ export default async function PartnershipsPage({ params }: { params: Promise<{ l
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:gap-4">
             {partnerships.map((p) => (
               <Link key={p.id} href={`/${locale}/partnerships/${p.id}`}>
                 <Card>

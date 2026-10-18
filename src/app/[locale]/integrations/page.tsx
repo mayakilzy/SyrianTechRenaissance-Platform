@@ -30,7 +30,7 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ l
             {locale === "ar" ? "لا توجد موصلات مسجلة بعد." : "No providers registered yet."}
           </CardContent></Card>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:gap-4">
             {providers.map((p) => (
               <Card key={p.id}>
                 <CardContent className="pt-6 flex items-center justify-between">
