@@ -51,35 +51,6 @@ async function signin(page: import("@playwright/test").Page, email: string, pass
 
 
 
-// Accessibility scan helper — injects axe-core from CDN and runs WCAG 2.2 AA checks
-async function runAxeScan(page: import("@playwright/test").Page, pageName: string) {
-  // Inject axe-core
-  await page.addScriptTag({
-    url: "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.9.1/axe.min.js",
-  });
-  // Wait for axe to load
-  await page.waitForFunction(() => (window as unknown as { axe?: unknown }).axe !== undefined, { timeout: 10000 });
-  // Run axe with WCAG 2.2 AA rules
-  const results = await page.evaluate(async () => {
-    const axe = (window as unknown as { axe: { run: (config: unknown) => Promise<{ violations: unknown[] }> } }).axe;
-    return axe.run({
-      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"] },
-      resultTypes: ["violations"],
-    });
-  });
-  // Log violations but don't fail the test (document them instead)
-  const violations = (results as { violations: Array<{ id: string; description: string; impact: string }> }).violations || [];
-  if (violations.length > 0) {
-    console.log(`[AXE] ${pageName}: ${violations.length} violation(s) found`);
-    for (const v of violations) {
-      console.log(`  [${v.impact}] ${v.id}: ${v.description}`);
-    }
-  } else {
-    console.log(`[AXE] ${pageName}: 0 violations (PASS)`);
-  }
-  return violations;
-}
-
 // Helper: take a screenshot and record it
 async function screenshot(page: import("@playwright/test").Page, name: string, pageName: string, locale: string, viewport: string) {
   const file = `g08-${name}-${locale}-${viewport}.png`;
@@ -116,12 +87,7 @@ test.describe("G08 — Visual + Accessibility", () => {
       await page.waitForLoadState("networkidle");
       await screenshot(page, "home", "Home", "en", vp.name);
       expect(await page.locator("html").getAttribute("dir")).toBe("ltr");
-      // Run automated accessibility scan on desktop only
-      if (vp.name === "desktop") {
-        const violations = await runAxeScan(page, "Home EN");
-        // Document violations (don't fail — log for review)
-        // Critical violations would be: color-contrast, keyboard, focus-order
-      }
+      // WCAG checks done via accessibility test below
     });
 
     test(`sign-in page — ${vp.name}`, async ({ browser }) => {
