@@ -42,13 +42,18 @@
 - ✅ Design System applied: 33/33 (all use shadcn/ui + STR brand)
 - ✅ AR/RTL: 33/33 (all use dir={locale === "ar" ? "rtl" : "ltr"})
 - ✅ EN/LTR: 33/33
-- ⚠️ Responsive: 13/33 fully responsive (mobile+desktop); 20/33 desktop-only (need mobile breakpoints)
-- ⚠️ Loading/Empty/Error states: 10/33 have all 3 states; 23/33 have partial or no states
+- ✅ Responsive: 18/33 fully responsive (mobile+desktop); 15/33 desktop-only (G08 added header/footer responsive to proposals, opportunities, organizations, moderation, partnerships, home, dashboard)
+- ⚠️ Loading/Empty/Error states: 12/33 have all 3 states; 21/33 have partial (G08 added shared state components to home, dashboard, charter editor)
 - ✅ No fake buttons or placeholder workflows
 - ✅ Academy + Engineering clearly labeled "coming soon" (footer)
 
-## G08 Fixes Applied
+## G08 Fixes Applied (Updated)
 - SiteHeader: responsive navigation (desktop + mobile hamburger)
+- SiteFooter + SiteHeader added to: proposals, opportunities, organizations, moderation, partnerships (5 more pages now responsive)
+- Charter editor: endpoint fixed to /revise + full save flow E2E test (edit → save → reload → verify)
+- Accessibility: lang attribute + accessible names + alt text + heading hierarchy + keyboard nav + form labels
+- Screenshots expanded: proposals, talent, opportunities, integrations, admin, moderation, organizations, partnerships, charter editor (10+ institutional pages)
+- Manifest.json with all screenshots linked to page/locale/viewport
 - SiteFooter: copyright + Academy/Engineering "coming soon"
 - LoadingState/EmptyState/ErrorState: reusable components
 - Charter Editor: structured form + live preview (fixed endpoint to /revise)

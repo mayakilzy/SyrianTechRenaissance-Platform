@@ -7,6 +7,8 @@ import { getProposalsForUser, getProposalsForReview } from "@/modules/proposals/
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
 
 export default async function ProposalsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -31,7 +33,10 @@ export default async function ProposalsPage({ params }: { params: Promise<{ loca
   ]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
+      <SiteHeader />>
       <div className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">{t("title")}</h1>
@@ -75,6 +80,7 @@ export default async function ProposalsPage({ params }: { params: Promise<{ loca
           </section>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }

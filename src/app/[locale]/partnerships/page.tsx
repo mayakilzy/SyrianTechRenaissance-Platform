@@ -6,6 +6,8 @@ import { getAuthOptions } from "@/modules/identity/auth-config";
 import { listPartnershipRequests } from "@/modules/partnerships/service";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
 
 /**
  * STR G06-A — Partnerships list (partnership_manager + admin only)
@@ -24,7 +26,10 @@ export default async function PartnershipsPage({ params }: { params: Promise<{ l
   }
 
   return (
-    <div className="min-h-screen bg-background" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <div className="min-h-screen bg-background flex flex-col"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
+      <SiteHeader /> dir={locale === "ar" ? "rtl" : "ltr"}>
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-6">
         <header>
           <h1 className="text-3xl font-bold">
@@ -59,6 +64,7 @@ export default async function PartnershipsPage({ params }: { params: Promise<{ l
           </div>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }

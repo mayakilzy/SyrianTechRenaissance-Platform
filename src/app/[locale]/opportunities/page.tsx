@@ -7,6 +7,8 @@ import { getPublishedOpportunities, getMyOpportunities } from "@/modules/opportu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
 
 export default async function OpportunitiesPage({ params, searchParams }: {
   params: Promise<{ locale: string }>;
@@ -34,7 +36,10 @@ export default async function OpportunitiesPage({ params, searchParams }: {
   const published = mine ? null : await getPublishedOpportunities(1);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
+      <SiteHeader />>
       <div className="container mx-auto px-4 sm:px-6 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">{t("title")}</h1>
@@ -83,6 +88,7 @@ export default async function OpportunitiesPage({ params, searchParams }: {
           </section>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }

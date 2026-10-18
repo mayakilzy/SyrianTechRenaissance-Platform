@@ -6,6 +6,8 @@ import { getAuthOptions } from "@/modules/identity/auth-config";
 import { listComplaints } from "@/modules/moderation/service";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
 
 export default async function ModerationPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -21,7 +23,10 @@ export default async function ModerationPage({ params }: { params: Promise<{ loc
   }
 
   return (
-    <div className="min-h-screen bg-background" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <div className="min-h-screen bg-background flex flex-col"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
+      <SiteHeader /> dir={locale === "ar" ? "rtl" : "ltr"}>
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-6">
         <header><h1 className="text-3xl font-bold">{locale === "ar" ? "طابور الإشراف" : "Moderation Queue"}</h1></header>
         {complaints.length === 0 ? (
@@ -47,6 +52,7 @@ export default async function ModerationPage({ params }: { params: Promise<{ loc
           </div>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }
