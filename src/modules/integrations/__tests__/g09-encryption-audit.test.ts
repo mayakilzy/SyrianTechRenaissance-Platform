@@ -34,18 +34,18 @@ const ORIG_NODE_ENV = process.env.NODE_ENV;
 
 beforeEach(() => {
   // Set a known key for deterministic testing
-  process.env.AUTH_SECRET = "ci-test-secret-at-least-16-chars";
-  process.env.INTEGRATION_ENCRYPTION_KEY = undefined;
-  process.env.NODE_ENV = "test";
+  (process.env as any).AUTH_SECRET = "ci-test-secret-at-least-16-chars";
+  (process.env as any).INTEGRATION_ENCRYPTION_KEY = undefined;
+  (process.env as any).NODE_ENV = "test";
   // Clear the cached key in secret-crypto.ts (it caches at module level)
   // We need to bust the cache by re-importing... actually the cache is per-process.
   // We'll test with the fallback key (AUTH_SECRET) which is set above.
 });
 
 afterEach(() => {
-  process.env.INTEGRATION_ENCRYPTION_KEY = ORIG_ENC_KEY;
-  process.env.AUTH_SECRET = ORIG_AUTH_SECRET;
-  process.env.NODE_ENV = ORIG_NODE_ENV;
+  (process.env as any).INTEGRATION_ENCRYPTION_KEY = ORIG_ENC_KEY;
+  (process.env as any).AUTH_SECRET = ORIG_AUTH_SECRET;
+  (process.env as any).NODE_ENV = ORIG_NODE_ENV;
 });
 
 describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
@@ -87,7 +87,7 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
     const encrypted = encryptSecret(plaintext);
 
     // Change the key (simulates wrong key)
-    process.env.AUTH_SECRET = "different-ci-test-secret-16c";
+    (process.env as any).AUTH_SECRET = "different-ci-test-secret-16c";
     // Note: the cached key in secret-crypto.ts won't update because it's cached.
     // This test documents that the cache prevents runtime key rotation.
     // For this test, we verify that the cache is in effect:
@@ -133,8 +133,8 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
 
   it("8. Missing key behavior: no INTEGRATION_ENCRYPTION_KEY or AUTH_SECRET → throws", () => {
     // Clear both keys
-    process.env.INTEGRATION_ENCRYPTION_KEY = undefined;
-    process.env.AUTH_SECRET = undefined;
+    (process.env as any).INTEGRATION_ENCRYPTION_KEY = undefined;
+    (process.env as any).AUTH_SECRET = undefined;
     // The cached key is still in memory from previous tests, so encryptSecret won't throw.
     // But if the cache were cleared (new process), it would throw.
     // This test documents the behavior: key is cached per-process.
@@ -148,7 +148,7 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
   });
 
   it("9. assertEncryptedInProduction: rejects plaintext in production", () => {
-    process.env.NODE_ENV = "production";
+    (process.env as any).NODE_ENV = "production";
     // Plaintext (not 3-part format) → throws in production
     expect(() => assertEncryptedInProduction("plaintext-secret-not-encrypted")).toThrow(
       "CRITICAL: Plaintext webhook secret detected in production"
@@ -162,9 +162,9 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
   });
 
   it("10. assertEncryptedInProduction: allows plaintext in non-production (test/dev)", () => {
-    process.env.NODE_ENV = "test";
+    (process.env as any).NODE_ENV = "test";
     expect(() => assertEncryptedInProduction("plaintext-secret-not-encrypted")).not.toThrow();
-    process.env.NODE_ENV = "development";
+    (process.env as any).NODE_ENV = "development";
     expect(() => assertEncryptedInProduction("plaintext-secret-not-encrypted")).not.toThrow();
   });
 });
