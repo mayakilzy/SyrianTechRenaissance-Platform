@@ -87,10 +87,10 @@ test.describe("G09 - RBAC + IDOR (Priority 1.2)", () => {
 
   // ── Admin-only endpoints (member should get 403) ──
 
-  test("1. Member tries POST /api/admin/grants -> 403 Forbidden", async () => {
-    const res = await apiCall(memberPage, "POST", "/api/admin/grants", {
-      userId: "any-user-id", role: "admin", scope: "global",
-    });
+  test("1. Member tries GET /api/admin/grants -> 403 Forbidden (admin-only)", async () => {
+    // Route /api/admin/grants has only GET handler; listAllGrants checks admin role.
+    // Member (authenticated but no admin role) → ForbiddenError → 403.
+    const res = await apiCall(memberPage, "GET", "/api/admin/grants");
     expect(res.ok).toBe(false);
     expect(res.status).toBe(403);
     expect(res.error?.code).toBe("STR_FORBIDDEN");

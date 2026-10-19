@@ -168,9 +168,8 @@ test.describe("G09 - Anti-Self + Segregation of Duties (Priority 1.3)", () => {
 
     const res = await apiCall(adminPage, "POST", "/api/moderation/complaints", {
       targetUserId: adminId, // self
-      projectId: null,
-      threadId: null,
-      reason: "Self-complaint attempt — should be blocked",
+      // projectId/threadId OMITTED (Zod v4 optional() accepts undefined but rejects null).
+      reason: "Self-complaint attempt — should be blocked by anti-self-complaint invariant",
     });
     expect(res.ok).toBe(false);
     expect(res.status).toBe(403);
@@ -228,8 +227,7 @@ test.describe("G09 - Anti-Self + Segregation of Duties (Priority 1.3)", () => {
 
     const complaintRes = await apiCall(adminPage, "POST", "/api/moderation/complaints", {
       targetUserId: proposerId,
-      projectId: null,
-      threadId: null,
+      // projectId/threadId OMITTED (Zod v4 null incompatibility).
       reason: "Setup complaint for anti-self-suspension test",
     });
     // If complaint creation fails, skip this test (proposer may not be a valid target)
