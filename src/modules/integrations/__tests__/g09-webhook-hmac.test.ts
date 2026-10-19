@@ -81,6 +81,7 @@ async function setupProjectWithProvider() {
   const providerSlug = `g09-hmac-${run.runId}`;
   const provider = await db.integrationProvider.create({
     data: {
+      id: `g09-hmac-prov-${run.runId}`,
       slug: providerSlug,
       version: "v1",
       displayName: `G09 HMAC Test Provider ${run.runId}`,
