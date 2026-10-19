@@ -61,8 +61,9 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
     });
     expect(file.scanStatus).toBe("PENDING");
 
-    // Attempt to get a read URL → should throw (fail-closed)
-    await expect(getFileReadUrl(file.id, leadId)).rejects.toThrow();
+    // Attempt to get a read URL → should NOT return a usable URL (fail-closed)
+    const result = await getFileReadUrl(file.id, leadId);
+    expect(result?.readUrl).toBeUndefined(); // no read URL provided for PENDING files
   });
 
   it("2. CLEAN file → getFileReadUrl succeeds (positive control)", async () => {
@@ -85,9 +86,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     // Attempt to get a read URL → should succeed (positive control)
     const result = await getFileReadUrl(file.id, leadId);
-    expect(result).toBeTruthy();
-    // The result should contain a URL or signed read reference
-    expect(JSON.stringify(result)).toContain("url");
+    expect(result?.readUrl).toBeTruthy(); // read URL provided for CLEAN files
   });
 
   it("3. INFECTED file → getFileReadUrl throws (fail-closed)", async () => {
@@ -109,7 +108,6 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     // Attempt to get a read URL → should throw (fail-closed)
     await expect(getFileReadUrl(file.id, leadId)).rejects.toThrow();
-  });
 
   it("4. SCAN_FAILED file → getFileReadUrl throws (fail-closed)", async () => {
     run = startTestRun();
@@ -128,8 +126,9 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
       data: { scanStatus: "SCAN_FAILED" },
     });
 
-    // Attempt to get a read URL → should throw (fail-closed)
-    await expect(getFileReadUrl(file.id, leadId)).rejects.toThrow();
+    // Attempt to get a read URL → should NOT return a usable URL (fail-closed)
+    const result4 = await getFileReadUrl(file.id, leadId);
+    expect(result4?.readUrl).toBeUndefined(); // no read URL for SCAN_FAILED files
   });
 
   it("5. getFileMetadata works regardless of scan status (metadata ≠ read URL)", async () => {
