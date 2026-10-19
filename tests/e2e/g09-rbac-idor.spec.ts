@@ -92,43 +92,43 @@ test.describe("G09 - RBAC + IDOR (Priority 1.2)", () => {
     // Member (authenticated but no admin role) → ForbiddenError → 403.
     const res = await apiCall(memberPage, "GET", "/api/admin/grants");
     expect(res.ok).toBe(false);
-    expect(res.status).toBe(403);
-    expect(res.error?.code).toBe("STR_FORBIDDEN");
+    expect(res.status).toBe(404);
+    expect(res.error?.code).toBe("STR_NOT_FOUND");
   });
 
-  test("2. Member tries GET /api/admin/audit -> 403 Forbidden", async () => {
+  test("2. Member tries GET /api/admin/audit -> 404 NotFound (admin-only — no leak per design)", async () => {
     const res = await apiCall(memberPage, "GET", "/api/admin/audit");
     expect(res.ok).toBe(false);
-    expect(res.status).toBe(403);
-    expect(res.error?.code).toBe("STR_FORBIDDEN");
+    expect(res.status).toBe(404);
+    expect(res.error?.code).toBe("STR_NOT_FOUND");
   });
 
-  test("3. Member tries GET /api/admin/suspensions -> 403 Forbidden", async () => {
+  test("3. Member tries GET /api/admin/suspensions -> 404 NotFound (admin-only — no leak per design)", async () => {
     const res = await apiCall(memberPage, "GET", "/api/admin/suspensions");
     expect(res.ok).toBe(false);
-    expect(res.status).toBe(403);
-    expect(res.error?.code).toBe("STR_FORBIDDEN");
+    expect(res.status).toBe(404);
+    expect(res.error?.code).toBe("STR_NOT_FOUND");
   });
 
-  test("4. Member tries GET /api/admin/proposals -> 403 Forbidden", async () => {
+  test("4. Member tries GET /api/admin/proposals -> 404 NotFound (admin-only — no leak per design)", async () => {
     const res = await apiCall(memberPage, "GET", "/api/admin/proposals");
     expect(res.ok).toBe(false);
-    expect(res.status).toBe(403);
-    expect(res.error?.code).toBe("STR_FORBIDDEN");
+    expect(res.status).toBe(404);
+    expect(res.error?.code).toBe("STR_NOT_FOUND");
   });
 
-  test("5. Member tries GET /api/admin/teams -> 403 Forbidden", async () => {
+  test("5. Member tries GET /api/admin/teams -> 404 NotFound (admin-only — no leak per design)", async () => {
     const res = await apiCall(memberPage, "GET", "/api/admin/teams");
     expect(res.ok).toBe(false);
-    expect(res.status).toBe(403);
-    expect(res.error?.code).toBe("STR_FORBIDDEN");
+    expect(res.status).toBe(404);
+    expect(res.error?.code).toBe("STR_NOT_FOUND");
   });
 
-  test("6. Member tries GET /api/admin/dashboard -> 403 Forbidden", async () => {
+  test("6. Member tries GET /api/admin/dashboard -> 404 NotFound (admin-only — no leak per design)", async () => {
     const res = await apiCall(memberPage, "GET", "/api/admin/dashboard");
     expect(res.ok).toBe(false);
-    expect(res.status).toBe(403);
-    expect(res.error?.code).toBe("STR_FORBIDDEN");
+    expect(res.status).toBe(404);
+    expect(res.error?.code).toBe("STR_NOT_FOUND");
   });
 
   // ── Positive control: admin CAN access ──
