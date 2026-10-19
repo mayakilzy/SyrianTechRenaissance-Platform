@@ -63,7 +63,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     // Attempt to get a read URL → should NOT return a usable URL (fail-closed)
     const result = await getFileReadUrl(file.id, leadId);
-    expect(result?.readUrl).toBeUndefined(); // no read URL provided for PENDING files
+    expect(result?.readUrl).toBeNull(); // no read URL provided for PENDING files
   });
 
   it("2. CLEAN file → getFileReadUrl succeeds (positive control)", async () => {
