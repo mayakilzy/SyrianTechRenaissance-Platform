@@ -163,7 +163,7 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
       },
     });
     await submitProposal(proposal.id, leadId);
-    await reviewProposal({ proposalId: proposal.id, reviewerId: adminId, action: "APPROVE", reason: "Approved.", stewardId });
+    await reviewProposal({ proposalId: proposal.id, reviewerId: adminId, action: "APPROVE", reason: "Approved for G09 encryption test.", stewardId });
     const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
     run.projectIds.push(project!.id);
 
@@ -211,7 +211,7 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
       },
     });
     await submitProposal(proposal.id, leadId);
-    await reviewProposal({ proposalId: proposal.id, reviewerId: adminId, action: "APPROVE", reason: "Approved.", stewardId });
+    await reviewProposal({ proposalId: proposal.id, reviewerId: adminId, action: "APPROVE", reason: "Approved for G09 encryption test.", stewardId });
     const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
     run.projectIds.push(project!.id);
 
