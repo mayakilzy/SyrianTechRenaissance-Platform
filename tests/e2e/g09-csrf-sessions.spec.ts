@@ -27,7 +27,7 @@ async function signin(page: import("@playwright/test").Page, email: string, pass
 }
 
 test.describe("G09 — CSRF & Sessions (Priority 1.8)", () => {
-  test("1. CSRF: cross-origin POST without SameSite cookie → rejected (no session)", async ({ browser }) => {
+  test("1. Unauthenticated POST -> 403 (auth check - NOT CSRF-specific) → rejected (no session)", async ({ browser }) => {
     // Create a fresh browser context (no cookies = no session)
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
@@ -76,8 +76,18 @@ test.describe("G09 — CSRF & Sessions (Priority 1.8)", () => {
     });
     expect(beforeRes.status).toBe(200);
 
-    // Sign out (clear all cookies)
-    await page.context().clearCookies();
+    // Sign out via next-auth signout endpoint (real flow, not manual cookie clear)
+    await page.goto("/en/api/auth/signout");
+    // next-auth signout page may require form submission
+    try {
+      await page.click('button[type="submit"]', { timeout: 5000 });
+      await page.waitForLoadState("networkidle");
+    } catch {
+      // If no form, try the API endpoint directly
+      await page.evaluate(async () => {
+        await fetch("/api/auth/signout", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "csrfToken=" });
+      });
+    }
 
     // Attempt authenticated request after signout → should be rejected
     const afterRes = await page.evaluate(async () => {
@@ -105,16 +115,14 @@ test.describe("G09 — CSRF & Sessions (Priority 1.8)", () => {
     await ctx.close();
   });
 
-  test("5. Session expiration: document as G10 (can't simulate JWT expiry in E2E)", async () => {
-    // JWT session expiration is configured in next-auth:
-    //   session: { strategy: "jwt" }
-    // The default maxAge is 30 days. Simulating expiry in E2E requires
-    // either manipulating the JWT token (which is httpOnly + signed)
-    // or mocking the clock — both are complex and not reliable in E2E.
-    //
-    // DEFERRED TO G10: test JWT expiration + token refresh in staging environment.
-    // The security invariant (expired tokens are rejected by next-auth's JWT callback)
-    // is enforced by the next-auth library itself.
-    expect(true).toBe(true); // Documented as G10 deferral
+  // Test 5: Session expiration — NOT TESTED
+  // JWT expiry simulation requires mocking the clock or manipulating signed JWT.
+  // Not practical in E2E. Deferred to G10 staging environment.
+  // Do NOT mark as PASS — this is NOT TESTED.
+  // The next-auth library enforces JWT expiration via its callback system.
+
+  test.skip("5. Session expiration: NOT TESTED (requires JWT expiry simulation — G10)", async () => {
+    // This test is SKIPPED — not a placeholder PASS.
+    // Marked as NOT TESTED in the security matrix.
   });
 });
