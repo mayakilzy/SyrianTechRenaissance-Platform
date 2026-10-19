@@ -120,7 +120,7 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
     // "No encryption key available (set INTEGRATION_ENCRYPTION_KEY or AUTH_SECRET)"
     // In CI, AUTH_SECRET is always set, so encryptSecret works.
     // This test verifies the error PATH exists by simulating the condition:
-    const raw = undefined; // simulate no env vars
+    const raw: string | undefined = undefined; // simulate no env vars
     if (!raw || raw.length < 16) {
       // This is the exact check in getEncryptionKey()
       expect(true).toBe(true); // code path exists + documented
