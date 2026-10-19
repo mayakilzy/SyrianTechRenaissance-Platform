@@ -122,7 +122,7 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
     // handling of invalid input (not key-missing, but format error):
     expect(() => decryptSecret("")).toThrow();
     expect(() => decryptSecret("not-an-encrypted-format")).toThrow();
-    expect(() => decryptSecret("a:b:c")).not.toThrow(); // valid 3-part format (will throw on decrypt)
+    expect(() => decryptSecret("a:b:c")).toThrow(); // 3-part format but not valid base64 → throws
   });
 
   it("9. assertEncryptedInProduction: rejects plaintext in production", () => {
