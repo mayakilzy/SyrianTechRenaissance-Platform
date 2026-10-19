@@ -31,6 +31,7 @@ test.describe("G09 — CSRF & Sessions (Priority 1.8)", () => {
     // Create a fresh browser context (no cookies = no session)
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
+    await page.goto("/en"); // Navigate to set base URL for relative fetch
 
     // Attempt a state-changing POST without authentication
     const res = await page.evaluate(async () => {
@@ -77,10 +78,10 @@ test.describe("G09 — CSRF & Sessions (Priority 1.8)", () => {
     expect(beforeRes.status).toBe(200);
 
     // Sign out via next-auth signout endpoint (real flow, not manual cookie clear)
-    await page.goto("/en/api/auth/signout");
+    await page.goto("/api/auth/signout"); // next-auth routes are NOT locale-prefixed
     // next-auth signout page may require form submission
     try {
-      await page.click('button[type="submit"]', { timeout: 5000 });
+      await page.click('button[type="submit"]', { timeout: 10000 });
       await page.waitForLoadState("networkidle");
     } catch {
       // If no form, try the API endpoint directly
