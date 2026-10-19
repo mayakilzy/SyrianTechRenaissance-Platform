@@ -32,8 +32,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
     }
 
     // Verify timestamp freshness (within 5 minutes)
-    const eventTime = parseInt(timestamp);
-    if (isNaN(eventTime) || Math.abs(Date.now() - eventTime) > 5 * 60 * 1000) {
+    // G09 fix: use Number() instead of parseInt() — parseInt("123abc") returns
+    // 123 (ignoring trailing garbage), but Number("123abc") returns NaN.
+    // Security headers should not accept malformed values as valid.
+    const eventTime = Number(timestamp);
+    if (!Number.isFinite(eventTime) || Math.abs(Date.now() - eventTime) > 5 * 60 * 1000) {
       return NextResponse.json({ ok: false, error: { code: "STR_UNAUTHORIZED", message: "Event timestamp outside allowed window" } }, { status: 401 });
     }
 
