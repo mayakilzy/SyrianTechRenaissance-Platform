@@ -108,7 +108,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     // Attempt to get a read URL → should NOT return a usable URL (fail-closed)
     const result3 = await getFileReadUrl(file.id, leadId);
-    expect(result3?.readUrl).toBeUndefined(); // no read URL for INFECTED files
+    expect(result3?.readUrl).toBeNull(); // no read URL for INFECTED files (fail-closed)
   });
 
   it("4. SCAN_FAILED file → getFileReadUrl throws (fail-closed)", async () => {
@@ -130,7 +130,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     // Attempt to get a read URL → should NOT return a usable URL (fail-closed)
     const result4 = await getFileReadUrl(file.id, leadId);
-    expect(result4?.readUrl).toBeUndefined(); // no read URL for SCAN_FAILED files
+    expect(result4?.readUrl).toBeNull(); // no read URL for SCAN_FAILED files (fail-closed)
   });
 
   it("5. getFileMetadata works regardless of scan status (metadata ≠ read URL)", async () => {
