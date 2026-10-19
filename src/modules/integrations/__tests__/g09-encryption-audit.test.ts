@@ -1,6 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
-import { execSync } from "node:child_process";
 import { encryptSecret, decryptSecret, assertEncryptedInProduction } from "@/modules/integrations/secret-crypto";
 import { db } from "@/lib/db";
 import {
