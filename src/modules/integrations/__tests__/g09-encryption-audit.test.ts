@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { execSync } from "node:child_process";
 import { encryptSecret, decryptSecret, assertEncryptedInProduction } from "@/modules/integrations/secret-crypto";
@@ -236,8 +236,8 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
     const connJson = JSON.stringify(connections[0]);
     expect(connJson).not.toContain(rawSecret);
     // Verify: the encrypted secret IS in the response (but not usable without the key)
-    expect(connections[0]!.webhookSecret).toBeTruthy();
-    expect(connections[0]!.webhookSecret!.split(":").length).toBe(3);
+    expect((connections[0] as any).webhookSecret).toBeTruthy();
+    expect((connections[0] as any).webhookSecret.split(":").length).toBe(3);
   });
 
   it("13. Error/log leak: decryptSecret error does not expose the secret value", () => {
