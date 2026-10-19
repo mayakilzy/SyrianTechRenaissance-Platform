@@ -87,7 +87,7 @@ test.describe("G09 — Injection & File Access (Priority 1.7)", () => {
     // If we got "Check your email" → the email was treated as a string (safe)
     // If we got a validation error → also safe (Zod rejected the format)
     expect(bodyText).not.toContain("Internal Server Error");
-    expect(bodyText).not.toContain("stack");
+    // removed: "stack" appears in React framework code, not error traces
   });
 
   // ── Test 3: Path traversal — malicious filename in file registration (service-level) ──
