@@ -76,27 +76,30 @@ async function setupProjectWithProvider() {
   run.proposalIds.push(proposal.id);
   run.projectIds.push(project.id);
 
-  // Ensure mock provider exists + is approved
-  const provider = await db.integrationProvider.upsert({
-    where: { id: "str.mock.v1" },
-    update: { isMock: true },
-    create: {
-      id: "str.mock.v1", slug: "str.mock", version: "v1",
-      displayName: "STR Mock Provider", description: "Mock", owner: "STR",
-      baseOrigin: "https://mock.str.local", trustStatus: "registered",
-      authMode: { type: "none" }, isMock: true,
+  // Create a UNIQUE provider per test run (NOT the shared "str.mock.v1")
+  // to avoid interfering with g07-service.test.ts which uses the shared provider.
+  const providerSlug = `g09-hmac-${run.runId}`;
+  const provider = await db.integrationProvider.create({
+    data: {
+      slug: providerSlug,
+      version: "v1",
+      displayName: `G09 HMAC Test Provider ${run.runId}`,
+      description: "Test provider for G09 HMAC verification — isolated per test run.",
+      owner: "STR",
+      baseOrigin: "https://mock.str.local",
+      trustStatus: "registered",
+      authMode: { type: "none" },
+      isMock: true,
     },
   });
-  await db.integrationCapability.upsert({
-    where: { providerId_code: { providerId: provider.id, code: "application.test" } },
-    update: {},
-    create: {
-      providerId: provider.id, code: "application.test", summary: "Test",
+  await db.integrationCapability.create({
+    data: {
+      providerId: provider.id, code: "application.test", summary: "Test capability for G09 HMAC.",
       executionMode: "async", riskClass: "low", requiredScopes: ["test"],
       inputSchemaRef: "ref", outputSchemaRef: "ref", idempotent: true, cancelable: true, timeoutMs: 30000,
     },
   });
-  if (provider.trustStatus !== "approved") await approveProvider(provider.id, adminId);
+  await approveProvider(provider.id, adminId);
   return { projectId: project.id, leadId, adminId, providerId: provider.id };
 }
 
