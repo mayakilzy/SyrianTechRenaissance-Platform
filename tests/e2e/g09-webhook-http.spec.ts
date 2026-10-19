@@ -166,37 +166,17 @@ test.describe("G09 — Webhook HTTP Integration (Priority 1.5 HTTP Closure)", ()
     const projectId = propGet.data?.proposal?.project?.id;
     expect(projectId).toBeTruthy();
 
-    // Create provider via API (lead creates)
-    const provRes = await apiCall(leadPage, "POST", "/api/integrations/providers", {
-      slug: `g09whk-${PREFIX}`,
-      version: "v1",
-      displayName: "G09 Webhook HTTP Test Provider",
-      description: "Test provider for webhook HTTP integration tests.",
-      owner: "STR",
-      baseOrigin: "https://mock.str.local",
-    });
-    // Provider creation may require admin — if fails, use admin
-    if (!provRes.ok) {
-      // Sign in as admin and create
-      const adminCtx = await browser.newContext();
-      const adminPage = await adminCtx.newPage();
-      await signin(adminPage, "test-admin@str.platform.local", "AdminPass123!");
-      const adminProvRes = await apiCall(adminPage, "POST", "/api/integrations/providers", {
-        slug: `g09whk-${PREFIX}`,
-        version: "v1",
-        displayName: "G09 Webhook HTTP Test Provider",
-        description: "Test provider for webhook HTTP integration tests.",
-        owner: "STR",
-        baseOrigin: "https://mock.str.local",
-      });
-      expect(adminProvRes.ok, `Admin provider creation failed: ${adminProvRes.error?.message}`).toBe(true);
-      providerId = adminProvRes.data?.provider?.id;
-      // Approve the provider
-      await apiCall(adminPage, "POST", `/api/integrations/providers/${providerId}/approve`, {});
-    } else {
-      providerId = provRes.data?.provider?.id;
-    }
-    expect(providerId).toBeTruthy();
+    // Use the seeded "str.mock.v1" provider (created by prisma/seed.ts).
+    // POST /api/integrations/providers doesn't exist (GET only) — providers
+    // are seeded, not created via API. Same pattern as g07-integration-flow.spec.ts.
+    providerId = "str.mock.v1";
+
+    // Approve the provider via admin (if not already approved)
+    const adminCtx = await browser.newContext();
+    const adminPage = await adminCtx.newPage();
+    await signin(adminPage, "test-admin@str.platform.local", "AdminPass123!");
+    // Approval is idempotent — if already approved, the route returns success or conflict
+    await apiCall(adminPage, "POST", `/api/integrations/providers/${providerId}/approve`, {});
 
     // Create connection via API → get raw webhookSecret from response
     const connRes = await apiCall(leadPage, "POST", `/api/projects/${projectId}/integrations`, {
@@ -205,8 +185,8 @@ test.describe("G09 — Webhook HTTP Integration (Priority 1.5 HTTP Closure)", ()
     expect(connRes.ok, `Connection creation failed: ${connRes.error?.message}`).toBe(true);
     connectionId = connRes.data?.connection?.id;
     rawSecret = connRes.data?.webhookSecret; // raw secret returned ONCE
-    expect(connectionId).toBeTruthy();
-    expect(rawSecret).toBeTruthy();
+    expect(connectionId, `Connection ID missing: ${JSON.stringify(connRes)}`).toBeTruthy();
+    expect(rawSecret, `Raw webhookSecret missing: ${JSON.stringify(connRes)}`).toBeTruthy();
   });
 
   // ── Test 1: Valid signature + all headers → 200 + event recorded ──
