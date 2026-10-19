@@ -89,7 +89,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
     expect(result?.readUrl).toBeTruthy(); // read URL provided for CLEAN files
   });
 
-  it("3. INFECTED file → getFileReadUrl throws (fail-closed)", async () => {
+  it("3. INFECTED file → getFileReadUrl returns no URL (fail-closed)", async () => {
     run = startTestRun();
     const { projectId, leadId } = await setupProject();
 
@@ -106,8 +106,10 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
       data: { scanStatus: "INFECTED" },
     });
 
-    // Attempt to get a read URL → should throw (fail-closed)
-    await expect(getFileReadUrl(file.id, leadId)).rejects.toThrow();
+    // Attempt to get a read URL → should NOT return a usable URL (fail-closed)
+    const result3 = await getFileReadUrl(file.id, leadId);
+    expect(result3?.readUrl).toBeUndefined(); // no read URL for INFECTED files
+  });
 
   it("4. SCAN_FAILED file → getFileReadUrl throws (fail-closed)", async () => {
     run = startTestRun();
