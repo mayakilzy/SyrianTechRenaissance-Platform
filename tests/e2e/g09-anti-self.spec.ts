@@ -318,10 +318,11 @@ test.describe("G09 - Anti-Self + Segregation of Duties (Priority 1.3)", () => {
     expect(afterRes.ok, "Admin should still be able to access dashboard after blocked self-suspension").toBe(true);
 
     // Verify complaint status is unchanged (still SUBMITTED, not RESOLVED_SUSPENDED)
+    // Per ChatGPT correction: make the read an EXPLICIT requirement (no `if` skip).
+    // If the GET endpoint fails for a real reason, the test should fail.
     const complaintRes = await apiCall(adminPage, "GET", `/api/moderation/complaints/${selfSuspensionComplaintId}`);
-    if (complaintRes.ok) {
-      expect(complaintRes.data?.complaint?.status).toBe("SUBMITTED");
-    }
+    expect(complaintRes.ok, `Should be able to read complaint as admin: ${complaintRes.error?.message}`).toBe(true);
+    expect(complaintRes.data?.complaint?.status).toBe("SUBMITTED");
   });
 
   // ── Test 6 (deliverable self-review): REMOVED — covered by g05 spec ──
