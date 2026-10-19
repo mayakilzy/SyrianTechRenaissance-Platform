@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { startTestRun, cleanupTestRun, createTestUser, type TestRun } from "./test-isolation";
 import { createProposal, submitProposal, reviewProposal } from "@/modules/proposals/service";
 import { suspendProject, reactivateProject, changeSteward, changeLead, inviteMember, acceptInvitation } from "@/modules/teams/service";
-import { ForbiddenError, UnprocessableEntityError } from "@/lib/errors";
+import { ForbiddenError, UnprocessableEntityError, NotFoundError } from "@/lib/errors";
 
 const validCharter = {
   problemStatement: "There is a significant gap in technical training opportunities for young developers in Syria.",
@@ -102,7 +102,9 @@ describe("G03-FIX §3 — Inside-service authorization for suspend/reactivate", 
     await reviewProposal({ proposalId: proposal.id, reviewerId, action: "APPROVE", reason: "Approved for governance testing purposes.", stewardId });
     const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
     if (!project) throw new Error("project not found");
-    await expect(suspendProject(project.id, memberId, "Should be blocked")).rejects.toThrow(ForbiddenError);
+    // G09 fix: non-participant (memberId is NOT in the project team) gets NotFound
+    // (not Forbidden) to avoid leaking project existence — matches G03/G04/G05 design.
+    await expect(suspendProject(project.id, memberId, "Should be blocked")).rejects.toThrow(NotFoundError);
     const unchanged = await db.project.findUnique({ where: { id: project.id } });
     expect(unchanged?.status).toBe("ACTIVE");
   });
@@ -163,7 +165,8 @@ describe("G03-FIX §3 — Inside-service authorization for suspend/reactivate", 
     const project = await db.project.findUnique({ where: { proposalId: proposal.id } });
     if (!project) throw new Error("project not found");
     await suspendProject(project.id, stewardId, "Test suspension");
-    await expect(reactivateProject(project.id, memberId)).rejects.toThrow(ForbiddenError);
+    // G09 fix: non-participant gets NotFound (not Forbidden) — no ID enumeration leak.
+    await expect(reactivateProject(project.id, memberId)).rejects.toThrow(NotFoundError);
   });
 });
 
