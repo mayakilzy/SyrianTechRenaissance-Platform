@@ -55,7 +55,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
     // Register a file (starts as PENDING by default)
     const file = await registerFile(projectId, leadId, {
       storageKey: `g09-file-pending-${run.runId}`,
-      filename: "test-pending.txt",
+      fileName: "test-pending.txt",
       mimeType: "text/plain",
       sizeBytes: 100,
     });
@@ -72,7 +72,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
     // Register a file (starts as PENDING)
     const file = await registerFile(projectId, leadId, {
       storageKey: `g09-file-clean-${run.runId}`,
-      filename: "test-clean.txt",
+      fileName: "test-clean.txt",
       mimeType: "text/plain",
       sizeBytes: 100,
     });
@@ -96,7 +96,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     const file = await registerFile(projectId, leadId, {
       storageKey: `g09-file-infected-${run.runId}`,
-      filename: "test-infected.txt",
+      fileName: "test-infected.txt",
       mimeType: "text/plain",
       sizeBytes: 100,
     });
@@ -117,7 +117,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     const file = await registerFile(projectId, leadId, {
       storageKey: `g09-file-scanfailed-${run.runId}`,
-      filename: "test-scanfailed.txt",
+      fileName: "test-scanfailed.txt",
       mimeType: "text/plain",
       sizeBytes: 100,
     });
@@ -138,7 +138,7 @@ describe("G09 — File Read-Before-CLEAN Fail-Closed (Priority 1.7)", () => {
 
     const file = await registerFile(projectId, leadId, {
       storageKey: `g09-file-meta-${run.runId}`,
-      filename: "test-metadata.txt",
+      fileName: "test-metadata.txt",
       mimeType: "text/plain",
       sizeBytes: 100,
     });
