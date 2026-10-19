@@ -110,7 +110,7 @@ describe("G09 — OAuth Collision (Priority 1.4)", () => {
       where: { userId: run.userIds[0] },
     });
     expect(identities.length).toBe(1); // only the password identity
-    expect(identities[0].provider).toBe("password");
+    expect(identities[0]!.provider).toBe("password");
   });
 
   it("Rule 4: New Google email (no existing user) → created (safe new account)", async () => {
@@ -167,7 +167,7 @@ describe("G09 — OAuth Collision (Priority 1.4)", () => {
       where: { userId, provider: "google" },
     });
     expect(identities.length).toBe(1);
-    expect(identities[0].providerSub).toBe(googleSub);
+    expect(identities[0]!.providerSub).toBe(googleSub);
   });
 
   it("Rule 1 conflict: Google sub already linked to DIFFERENT user → blocked", async () => {
@@ -253,6 +253,6 @@ describe("G09 — OAuth Collision (Priority 1.4)", () => {
       where: { userId: run.userIds[0] },
     });
     expect(victimIdentities.length).toBe(1);
-    expect(victimIdentities[0].provider).toBe("password");
+    expect(victimIdentities[0]!.provider).toBe("password");
   });
 });
