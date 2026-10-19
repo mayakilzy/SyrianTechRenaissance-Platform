@@ -215,9 +215,10 @@ describe("G09 — Encryption & Secrets Audit (Priority 1.6)", () => {
     // Verify: the raw secret is NOT in the list response
     const connJson = JSON.stringify(connections[0]);
     expect(connJson).not.toContain(rawSecret);
-    // Verify: the encrypted secret IS in the response (but not usable without the key)
-    expect((connections[0] as any).webhookSecret).toBeTruthy();
-    expect((connections[0] as any).webhookSecret.split(":").length).toBe(3);
+    // G09 security fix: listConnections now EXCLUDES webhookSecret + webhookSecretHash
+    // Verify they are NOT in the read response (security regression test)
+    expect((connections[0] as any).webhookSecret).toBeUndefined();
+    expect((connections[0] as any).webhookSecretHash).toBeUndefined();
   });
 
   it("13. Error/log leak: decryptSecret error does not expose the secret value", () => {
