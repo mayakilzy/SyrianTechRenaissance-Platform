@@ -220,8 +220,11 @@ test.describe("G09 - Cross-Project Isolation (Priority 1.1)", () => {
     expect(res.data).toBeTruthy();
   });
 
-  test("5. Cross-project: Lead A cannot list Project B deliverables", async () => {
-    const res = await apiCall(leadAPage, "GET", `/api/projects/${projectBId}/deliverables`);
+  test("5. Cross-project: Lead A cannot create deliverable in Project B (POST with fake taskId)", async () => {
+    // POST /api/projects/{id}/deliverables uses taskId from the body (URL projectId is not validated by the route).
+    // createDeliverable looks up the task — if it doesn't exist OR if the actor isn't a project participant,
+    // NotFoundError is thrown (matches G03/G04/G05 design pattern — no ID enumeration leak).
+    const res = await apiCall(leadAPage, "POST", `/api/projects/${projectBId}/deliverables`, { taskId: `nonexistent-${PREFIX}` });
     expect(res.ok).toBe(false);
     expect(res.status).toBe(404);
     expect(res.error?.code).toBe("STR_NOT_FOUND");

@@ -28,9 +28,16 @@ import {
  * Throws ForbiddenError if not. Called INSIDE suspend/reactivate.
  */
 async function assertCanGovernProject(projectId: string, actorId: string): Promise<void> {
+  // G09 FIX: include team memberships in the lookup so we can distinguish
+  // "participant but not governor" (Forbidden — they know it exists) from
+  // "non-participant" (NotFound — don't leak existence per G03/G04/G05
+  // design pattern, matches assertProjectParticipant).
   const project = await db.project.findUnique({
     where: { id: projectId },
-    select: { stewardId: true },
+    select: {
+      stewardId: true,
+      team: { select: { memberships: { where: { leftAt: null, userId: actorId }, select: { id: true } } } },
+    },
   });
   if (!project) throw new NotFoundError("Project not found");
 
@@ -43,7 +50,16 @@ async function assertCanGovernProject(projectId: string, actorId: string): Promi
   });
   if (adminGrant) return;
 
-  throw new ForbiddenError("Only the project steward or an admin can govern this project");
+  // If actor IS a team participant (lead/member) but not steward/admin,
+  // Forbidden is appropriate — they already know the project exists.
+  const isParticipant = (project.team?.memberships?.length ?? 0) > 0;
+  if (isParticipant) {
+    throw new ForbiddenError("Only the project steward or an admin can govern this project");
+  }
+
+  // Non-participant: NotFound to avoid leaking project existence
+  // (matches assertProjectParticipant pattern in projects/service.ts).
+  throw new NotFoundError("Project not found");
 }
 
 // ---------------------------------------------------------------------------
