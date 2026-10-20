@@ -361,25 +361,34 @@ test.describe("G09-P2 — Mobile viewport interaction", () => {
 
 // ───────────────────────────────────────────────────────────────────────
 // 6. Session edge cases
-//   The app uses NextAuth with a session callback. Unauthenticated users
-//   accessing /dashboard should be redirected. The exact redirect target
-//   depends on middleware config; we verify the PROTECTION (not on dashboard)
-//   not the specific redirect URL.
+//   The dashboard component (dashboard/page.tsx lines 26-41) does NOT
+//   redirect unauthenticated users. Instead, it renders a Card with a
+//   "Sign in" button when `!session`. We verify the user sees the signin
+//   prompt (not a 404, not a crash, not silent access to dashboard data).
 // ───────────────────────────────────────────────────────────────────────
 
 test.describe("G09-P2 — Session edge cases", () => {
-  test("unauthenticated user accessing /en/dashboard is NOT on dashboard", async ({ page }) => {
-    // Clear any existing session.
+  test("unauthenticated user accessing /en/dashboard sees signin prompt (no redirect)", async ({ page }) => {
+    // Per the ACTUAL component (dashboard/page.tsx lines 26-41):
+    //   if (!session) { return <Card>...<Button>Sign in</Button>...</Card> }
+    // The app does NOT redirect unauthenticated users from /dashboard.
+    // Instead, it renders the dashboard page with a "Sign in" button.
+    // This is the documented component behavior — we verify it.
     await page.context().clearCookies();
 
-    // Try to access dashboard directly.
     await page.goto("/en/dashboard");
 
-    // Wait for any redirect to complete.
+    // Wait for the session check to complete (status === "loading" first,
+    // then renders the !session branch).
     await page.waitForTimeout(3000);
 
-    // CRITICAL: should NOT be on dashboard.
-    expect(page.url()).not.toMatch(/\/dashboard/);
+    // The URL stays on /dashboard (no redirect).
+    expect(page.url()).toMatch(/\/dashboard/);
+
+    // The page renders the signin prompt: a Card with a "Sign in" button.
+    // The button links to /auth/signin (component line 35).
+    const signinLink = page.locator('a[href*="auth/signin"]');
+    await expect(signinLink).toBeVisible({ timeout: 5000 });
 
     // Verify the page didn't crash (body has visible content).
     const bodyVisible = await page.locator("body").isVisible();
