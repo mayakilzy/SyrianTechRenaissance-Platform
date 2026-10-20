@@ -560,25 +560,33 @@ export async function submitRightsDeclaration(
   if (existing) {
     throw new ConflictError("A rights declaration already exists for this contribution");
   }
-  const declaration = await db.contributionRightsDeclaration.create({
-    data: {
-      contributionId,
-      declaredById: declarerId,
-      declarationType: valid.data.declarationType,
-      declarationText: valid.data.declarationText,
-      evidenceStorageKey: valid.data.evidenceStorageKey || null,
-      evidenceScanStatus: valid.data.evidenceStorageKey ? "PENDING" : null,
-    },
-  });
-  await db.auditEvent.create({
-    data: buildAuditData({
-      actorId: declarerId,
-      action: "rights.declare",
-      targetType: "ContributionReference",
-      targetId: contributionId,
-      outcome: "success",
-      reason: `Declared as ${valid.data.declarationType}`,
-    }),
+  // G09-P2 Gap 3: atomic — declaration creation + audit in one transaction.
+  // Per ChatGPT review: rights declarations may carry legal/governance
+  // implications, so this is classified as HIGH-risk (moved from Group C
+  // to Group A). If the audit write fails, the declaration creation rolls
+  // back — no rights declaration without an audit trail.
+  const declaration = await db.$transaction(async (tx) => {
+    const created = await tx.contributionRightsDeclaration.create({
+      data: {
+        contributionId,
+        declaredById: declarerId,
+        declarationType: valid.data.declarationType,
+        declarationText: valid.data.declarationText,
+        evidenceStorageKey: valid.data.evidenceStorageKey || null,
+        evidenceScanStatus: valid.data.evidenceStorageKey ? "PENDING" : null,
+      },
+    });
+    await tx.auditEvent.create({
+      data: buildAuditData({
+        actorId: declarerId,
+        action: "rights.declare",
+        targetType: "ContributionReference",
+        targetId: contributionId,
+        outcome: "success",
+        reason: `Declared as ${valid.data.declarationType}`,
+      }),
+    });
+    return created;
   });
   logger.info("partnerships.rights.declared", {
     declarationId: declaration.id,

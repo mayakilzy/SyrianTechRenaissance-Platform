@@ -89,21 +89,28 @@ export async function approveProvider(providerId: string, approverId: string) {
   if (!(await isAdmin(approverId))) {
     throw new ForbiddenError("Only admins can approve providers");
   }
-  const result = await db.integrationProvider.updateMany({
-    where: { id: providerId, trustStatus: "registered" },
-    data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
-  });
-  if (result.count === 0) {
-    throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
-  }
-  await db.auditEvent.create({
-    data: buildAuditData({
-      actorId: approverId,
-      action: "provider.approve",
-      targetType: "IntegrationProvider",
-      targetId: providerId,
-      outcome: "success",
-    }),
+  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+  // If the audit write fails, the state change rolls back (no approval
+  // without audit trail). The optimistic-lock updateMany stays inside
+  // the transaction; if count=0 (already approved / concurrent), the
+  // transaction throws ConflictError and nothing commits.
+  await db.$transaction(async (tx) => {
+    const result = await tx.integrationProvider.updateMany({
+      where: { id: providerId, trustStatus: "registered" },
+      data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
+    });
+    if (result.count === 0) {
+      throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
+    }
+    await tx.auditEvent.create({
+      data: buildAuditData({
+        actorId: approverId,
+        action: "provider.approve",
+        targetType: "IntegrationProvider",
+        targetId: providerId,
+        outcome: "success",
+      }),
+    });
   });
   logger.info("integrations.provider.approved", { providerId, approverId });
   return { id: providerId, trustStatus: "approved" as const };
@@ -206,27 +213,30 @@ export async function revokeConnection(connectionId: string, actorId: string, re
   if (conn.status === "revoked") {
     throw new ConflictError("Connection is already revoked");
   }
-  const result = await db.integrationConnection.updateMany({
-    where: { id: connectionId, status: { not: "revoked" } },
-    data: { status: "revoked", revokedAt: new Date(), revokedReason: reason },
-  });
-  if (result.count === 0) {
-    throw new ConflictError("Connection is no longer revocable (concurrent transition)");
-  }
-  // Cancel all queued/running jobs for this connection
-  await db.integrationJob.updateMany({
-    where: { connectionId, status: { in: ["queued", "running"] } },
-    data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
-  });
-  await db.auditEvent.create({
-    data: buildAuditData({
-      actorId,
-      action: "connection.revoke",
-      targetType: "IntegrationConnection",
-      targetId: connectionId,
-      outcome: "success",
-      reason,
-    }),
+  // G09-P2 Gap 3: atomic — state change + job cancellation + audit in one tx.
+  await db.$transaction(async (tx) => {
+    const result = await tx.integrationConnection.updateMany({
+      where: { id: connectionId, status: { not: "revoked" } },
+      data: { status: "revoked", revokedAt: new Date(), revokedReason: reason },
+    });
+    if (result.count === 0) {
+      throw new ConflictError("Connection is no longer revocable (concurrent transition)");
+    }
+    // Cancel all queued/running jobs for this connection (same transaction)
+    await tx.integrationJob.updateMany({
+      where: { connectionId, status: { in: ["queued", "running"] } },
+      data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
+    });
+    await tx.auditEvent.create({
+      data: buildAuditData({
+        actorId,
+        action: "connection.revoke",
+        targetType: "IntegrationConnection",
+        targetId: connectionId,
+        outcome: "success",
+        reason,
+      }),
+    });
   });
   logger.info("integrations.connection.revoked", { connectionId, actorId });
   return { id: connectionId, status: "revoked" as const };
@@ -247,22 +257,25 @@ export async function suspendConnection(connectionId: string, actorId: string, r
   if (conn.status !== "active") {
     throw new ConflictError(`Connection is ${conn.status}; cannot suspend`);
   }
-  const result = await db.integrationConnection.updateMany({
-    where: { id: connectionId, status: "active" },
-    data: { status: "suspended", suspendedAt: new Date(), suspendedReason: reason },
-  });
-  if (result.count === 0) {
-    throw new ConflictError("Connection is no longer active (concurrent transition)");
-  }
-  await db.auditEvent.create({
-    data: buildAuditData({
-      actorId,
-      action: "connection.suspend",
-      targetType: "IntegrationConnection",
-      targetId: connectionId,
-      outcome: "success",
-      reason,
-    }),
+  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+  await db.$transaction(async (tx) => {
+    const result = await tx.integrationConnection.updateMany({
+      where: { id: connectionId, status: "active" },
+      data: { status: "suspended", suspendedAt: new Date(), suspendedReason: reason },
+    });
+    if (result.count === 0) {
+      throw new ConflictError("Connection is no longer active (concurrent transition)");
+    }
+    await tx.auditEvent.create({
+      data: buildAuditData({
+        actorId,
+        action: "connection.suspend",
+        targetType: "IntegrationConnection",
+        targetId: connectionId,
+        outcome: "success",
+        reason,
+      }),
+    });
   });
   logger.info("integrations.connection.suspended", { connectionId, actorId });
   return { id: connectionId, status: "suspended" as const };
