@@ -36,6 +36,7 @@
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { buildAuditData } from "@/lib/audit";
+import { withDeniedFailureAudit } from "@/lib/audit-denied";
 import {
   ValidationError,
   NotFoundError,
@@ -535,66 +536,82 @@ export async function submitRightsDeclaration(
   declarerId: string,
   input: RightsDeclarationInput,
 ) {
-  const valid = rightsDeclarationSchema.safeParse(input);
-  if (!valid.success) {
-    const fields: Record<string, string[]> = {};
-    for (const issue of valid.error.issues) {
-      (fields[issue.path.join(".") || "_"] ??= []).push(issue.message);
-    }
-    throw new ValidationError("Invalid rights declaration data", fields);
-  }
-  const contribution = await db.contributionReference.findUnique({
-    where: { id: contributionId },
-    include: { contributor: { select: { id: true, displayName: true, email: true } } },
-  });
-  if (!contribution) throw new NotFoundError("Contribution not found");
-  // Authorization: contributor OR admin
-  const admin = await isAdmin(declarerId);
-  if (contribution.contributorId !== declarerId && !admin) {
-    throw new ForbiddenError("Only the contributor or an admin can submit a rights declaration");
-  }
-  // One declaration per contribution (unique constraint)
-  const existing = await db.contributionRightsDeclaration.findUnique({
-    where: { contributionId },
-  });
-  if (existing) {
-    throw new ConflictError("A rights declaration already exists for this contribution");
-  }
-  // G09-P2 Gap 3: atomic — declaration creation + audit in one transaction.
-  // Per ChatGPT review: rights declarations may carry legal/governance
-  // implications, so this is classified as HIGH-risk (moved from Group C
-  // to Group A). If the audit write fails, the declaration creation rolls
-  // back — no rights declaration without an audit trail.
-  const declaration = await db.$transaction(async (tx) => {
-    const created = await tx.contributionRightsDeclaration.create({
-      data: {
+  return withDeniedFailureAudit(
+    {
+      actorId: declarerId,
+      action: "rights.declare",
+      targetType: "ContributionReference",
+      targetId: contributionId,
+      hideTargetIdOnNotFound: true, // don't confirm contribution existence to unauthorized users
+    },
+    async () => {
+      const valid = rightsDeclarationSchema.safeParse(input);
+      if (!valid.success) {
+        const fields: Record<string, string[]> = {};
+        for (const issue of valid.error.issues) {
+          (fields[issue.path.join(".") || "_"] ??= []).push(issue.message);
+        }
+        throw new ValidationError("Invalid rights declaration data", fields);
+      }
+      const contribution = await db.contributionReference.findUnique({
+        where: { id: contributionId },
+        include: { contributor: { select: { id: true, displayName: true, email: true } } },
+      });
+      if (!contribution) {
+        throw new NotFoundError("Contribution not found", { auditReason: "entity_not_found" });
+      }
+      // Authorization: contributor OR admin
+      const admin = await isAdmin(declarerId);
+      if (contribution.contributorId !== declarerId && !admin) {
+        // NotFound (not Forbidden) to avoid confirming contribution existence
+        throw new NotFoundError("Contribution not found", { auditReason: "entity_not_found" });
+      }
+      // One declaration per contribution (unique constraint)
+      const existing = await db.contributionRightsDeclaration.findUnique({
+        where: { contributionId },
+      });
+      if (existing) {
+        throw new ConflictError("A rights declaration already exists for this contribution", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — declaration creation + audit in one transaction.
+      // Per ChatGPT review: rights declarations may carry legal/governance
+      // implications, so this is classified as HIGH-risk (moved from Group C
+      // to Group A). If the audit write fails, the declaration creation rolls
+      // back — no rights declaration without an audit trail.
+      const declaration = await db.$transaction(async (tx) => {
+        const created = await tx.contributionRightsDeclaration.create({
+          data: {
+            contributionId,
+            declaredById: declarerId,
+            declarationType: valid.data.declarationType,
+            declarationText: valid.data.declarationText,
+            evidenceStorageKey: valid.data.evidenceStorageKey || null,
+            evidenceScanStatus: valid.data.evidenceStorageKey ? "PENDING" : null,
+          },
+        });
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId: declarerId,
+            action: "rights.declare",
+            targetType: "ContributionReference",
+            targetId: contributionId,
+            outcome: "success",
+            reason: `Declared as ${valid.data.declarationType}`,
+          }),
+        });
+        return created;
+      });
+      logger.info("partnerships.rights.declared", {
+        declarationId: declaration.id,
         contributionId,
-        declaredById: declarerId,
         declarationType: valid.data.declarationType,
-        declarationText: valid.data.declarationText,
-        evidenceStorageKey: valid.data.evidenceStorageKey || null,
-        evidenceScanStatus: valid.data.evidenceStorageKey ? "PENDING" : null,
-      },
-    });
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId: declarerId,
-        action: "rights.declare",
-        targetType: "ContributionReference",
-        targetId: contributionId,
-        outcome: "success",
-        reason: `Declared as ${valid.data.declarationType}`,
-      }),
-    });
-    return created;
-  });
-  logger.info("partnerships.rights.declared", {
-    declarationId: declaration.id,
-    contributionId,
-    declarationType: valid.data.declarationType,
-    declarerId,
-  });
-  return declaration;
+        declarerId,
+      });
+      return declaration;
+    },
+  );
 }
 
 /**

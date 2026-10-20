@@ -20,6 +20,7 @@
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { buildAuditData } from "@/lib/audit";
+import { withDeniedFailureAudit } from "@/lib/audit-denied";
 import {
   ValidationError,
   NotFoundError,
@@ -190,28 +191,35 @@ export async function listOrganizations(actorId: string, filter?: { status?: str
  * Atomic with optimistic lock.
  */
 export async function verifyOrganization(orgId: string, actorId: string) {
-  await assertAdmin(actorId);
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.organization.updateMany({
-      where: { id: orgId, status: "PENDING_VERIFICATION" },
-      data: { status: "ACTIVE", verifiedAt: new Date(), verifiedById: actorId },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Organization is not in PENDING_VERIFICATION status (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "organization.verify",
-        targetType: "Organization",
-        targetId: orgId,
-        outcome: "success",
-      }),
-    });
-  });
-  logger.info("organizations.verified", { organizationId: orgId, actorId });
-  return { id: orgId, status: "ACTIVE" as const };
+  return withDeniedFailureAudit(
+    { actorId, action: "organization.verify", targetType: "Organization", targetId: orgId },
+    async () => {
+      await assertAdmin(actorId);
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.organization.updateMany({
+          where: { id: orgId, status: "PENDING_VERIFICATION" },
+          data: { status: "ACTIVE", verifiedAt: new Date(), verifiedById: actorId },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Organization is not in PENDING_VERIFICATION status (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "organization.verify",
+            targetType: "Organization",
+            targetId: orgId,
+            outcome: "success",
+          }),
+        });
+      });
+      logger.info("organizations.verified", { organizationId: orgId, actorId });
+      return { id: orgId, status: "ACTIVE" as const };
+    },
+  );
 }
 
 /**
@@ -222,60 +230,74 @@ export async function suspendOrganization(
   actorId: string,
   reason: string,
 ) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Suspension reason must be at least 10 characters");
-  }
-  await assertAdmin(actorId);
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.organization.updateMany({
-      where: { id: orgId, status: "ACTIVE" },
-      data: { status: "SUSPENDED", suspendedAt: new Date(), suspendedReason: reason },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Organization is not in ACTIVE status (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "organization.suspend",
-        targetType: "Organization",
-        targetId: orgId,
-        outcome: "success",
-        reason,
-      }),
-    });
-  });
-  logger.info("organizations.suspended", { organizationId: orgId, actorId });
-  return { id: orgId, status: "SUSPENDED" as const };
+  return withDeniedFailureAudit(
+    { actorId, action: "organization.suspend", targetType: "Organization", targetId: orgId },
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Suspension reason must be at least 10 characters");
+      }
+      await assertAdmin(actorId);
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.organization.updateMany({
+          where: { id: orgId, status: "ACTIVE" },
+          data: { status: "SUSPENDED", suspendedAt: new Date(), suspendedReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Organization is not in ACTIVE status (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "organization.suspend",
+            targetType: "Organization",
+            targetId: orgId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("organizations.suspended", { organizationId: orgId, actorId });
+      return { id: orgId, status: "SUSPENDED" as const };
+    },
+  );
 }
 
 /**
  * Reactivate organization (SUSPENDED → ACTIVE). Admin only.
  */
 export async function reactivateOrganization(orgId: string, actorId: string) {
-  await assertAdmin(actorId);
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.organization.updateMany({
-      where: { id: orgId, status: "SUSPENDED" },
-      data: { status: "ACTIVE", suspendedAt: null, suspendedReason: null },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Organization is not in SUSPENDED status (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "organization.reactivate",
-        targetType: "Organization",
-        targetId: orgId,
-        outcome: "success",
-      }),
-    });
-  });
-  logger.info("organizations.reactivated", { organizationId: orgId, actorId });
-  return { id: orgId, status: "ACTIVE" as const };
+  return withDeniedFailureAudit(
+    { actorId, action: "organization.reactivate", targetType: "Organization", targetId: orgId },
+    async () => {
+      await assertAdmin(actorId);
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.organization.updateMany({
+          where: { id: orgId, status: "SUSPENDED" },
+          data: { status: "ACTIVE", suspendedAt: null, suspendedReason: null },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Organization is not in SUSPENDED status (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "organization.reactivate",
+            targetType: "Organization",
+            targetId: orgId,
+            outcome: "success",
+          }),
+        });
+      });
+      logger.info("organizations.reactivated", { organizationId: orgId, actorId });
+      return { id: orgId, status: "ACTIVE" as const };
+    },
+  );
 }
 
 /**
@@ -286,32 +308,39 @@ export async function revokeOrganization(
   actorId: string,
   reason: string,
 ) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Revocation reason must be at least 10 characters");
-  }
-  await assertAdmin(actorId);
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.organization.updateMany({
-      where: { id: orgId, status: { not: "REVOKED" } },
-      data: { status: "REVOKED", revokedAt: new Date(), revokedReason: reason },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Organization is already REVOKED");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "organization.revoke",
-        targetType: "Organization",
-        targetId: orgId,
-        outcome: "success",
-        reason,
-      }),
-    });
-  });
-  logger.info("organizations.revoked", { organizationId: orgId, actorId });
-  return { id: orgId, status: "REVOKED" as const };
+  return withDeniedFailureAudit(
+    { actorId, action: "organization.revoke", targetType: "Organization", targetId: orgId },
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Revocation reason must be at least 10 characters");
+      }
+      await assertAdmin(actorId);
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.organization.updateMany({
+          where: { id: orgId, status: { not: "REVOKED" } },
+          data: { status: "REVOKED", revokedAt: new Date(), revokedReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Organization is already REVOKED", {
+            auditReason: "invalid_state_transition",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "organization.revoke",
+            targetType: "Organization",
+            targetId: orgId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("organizations.revoked", { organizationId: orgId, actorId });
+      return { id: orgId, status: "REVOKED" as const };
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -379,44 +408,58 @@ export async function addRepresentative(
  * Anti-self-verification guard: if verifierId === rep.userId → ForbiddenError.
  */
 export async function verifyRepresentative(repId: string, verifierId: string) {
-  await assertAdmin(verifierId);
-  const rep = await db.organizationRepresentative.findUnique({
-    where: { id: repId },
-  });
-  if (!rep) throw new NotFoundError("Representative not found");
-  // Anti-self-verification — the verifier must NOT be the same user as the rep
-  if (rep.userId === verifierId) {
-    throw new ForbiddenError(
-      "Cannot verify your own delegated authority — requires independent admin verification",
-    );
-  }
-  if (rep.revokedAt !== null) {
-    throw new ConflictError("Representative has been revoked; cannot verify");
-  }
-  if (rep.verifiedAt !== null) {
-    throw new ConflictError("Representative is already verified");
-  }
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.organizationRepresentative.updateMany({
-      where: { id: repId, verifiedAt: null, revokedAt: null },
-      data: { verifiedAt: new Date(), verifiedById: verifierId },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Representative is no longer in a verifiable state (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId: verifierId,
-        action: "representative.verify",
-        targetType: "OrganizationRepresentative",
-        targetId: repId,
-        outcome: "success",
-      }),
-    });
-  });
-  logger.info("organizations.rep.verified", { representativeId: repId, verifierId });
-  return { id: repId, verifiedAt: new Date().toISOString() };
+  return withDeniedFailureAudit(
+    { actorId: verifierId, action: "representative.verify", targetType: "OrganizationRepresentative", targetId: repId },
+    async () => {
+      await assertAdmin(verifierId);
+      const rep = await db.organizationRepresentative.findUnique({
+        where: { id: repId },
+      });
+      if (!rep) {
+        throw new NotFoundError("Representative not found", { auditReason: "entity_not_found" });
+      }
+      // Anti-self-verification — the verifier must NOT be the same user as the rep
+      if (rep.userId === verifierId) {
+        throw new ForbiddenError(
+          "Cannot verify your own delegated authority — requires independent admin verification",
+          { auditReason: "conflict_of_interest" },
+        );
+      }
+      if (rep.revokedAt !== null) {
+        throw new ConflictError("Representative has been revoked; cannot verify", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      if (rep.verifiedAt !== null) {
+        throw new ConflictError("Representative is already verified", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.organizationRepresentative.updateMany({
+          where: { id: repId, verifiedAt: null, revokedAt: null },
+          data: { verifiedAt: new Date(), verifiedById: verifierId },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Representative is no longer in a verifiable state (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId: verifierId,
+            action: "representative.verify",
+            targetType: "OrganizationRepresentative",
+            targetId: repId,
+            outcome: "success",
+          }),
+        });
+      });
+      logger.info("organizations.rep.verified", { representativeId: repId, verifierId });
+      return { id: repId, verifiedAt: new Date().toISOString() };
+    },
+  );
 }
 
 /**
@@ -427,37 +470,48 @@ export async function revokeRepresentative(
   actorId: string,
   reason: string,
 ) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Revocation reason must be at least 10 characters");
-  }
-  await assertAdmin(actorId);
-  const rep = await db.organizationRepresentative.findUnique({ where: { id: repId } });
-  if (!rep) throw new NotFoundError("Representative not found");
-  if (rep.revokedAt !== null) {
-    throw new ConflictError("Representative is already revoked");
-  }
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.organizationRepresentative.updateMany({
-      where: { id: repId, revokedAt: null },
-      data: { revokedAt: new Date(), revokeReason: reason },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Representative is no longer revocable (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "representative.revoke",
-        targetType: "OrganizationRepresentative",
-        targetId: repId,
-        outcome: "success",
-        reason,
-      }),
-    });
-  });
-  logger.info("organizations.rep.revoked", { representativeId: repId, actorId });
-  return { id: repId, revokedAt: new Date().toISOString() };
+  return withDeniedFailureAudit(
+    { actorId, action: "representative.revoke", targetType: "OrganizationRepresentative", targetId: repId },
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Revocation reason must be at least 10 characters");
+      }
+      await assertAdmin(actorId);
+      const rep = await db.organizationRepresentative.findUnique({ where: { id: repId } });
+      if (!rep) {
+        throw new NotFoundError("Representative not found", { auditReason: "entity_not_found" });
+      }
+      if (rep.revokedAt !== null) {
+        throw new ConflictError("Representative is already revoked", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.organizationRepresentative.updateMany({
+          where: { id: repId, revokedAt: null },
+          data: { revokedAt: new Date(), revokeReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Representative is no longer revocable (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "representative.revoke",
+            targetType: "OrganizationRepresentative",
+            targetId: repId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("organizations.rep.revoked", { representativeId: repId, actorId });
+      return { id: repId, revokedAt: new Date().toISOString() };
+    },
+  );
 }
 
 /**

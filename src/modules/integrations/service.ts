@@ -220,89 +220,124 @@ export async function createConnection(creatorId: string, input: ConnectionCreat
 }
 
 export async function revokeConnection(connectionId: string, actorId: string, reason: string) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Revocation reason must be at least 10 characters");
-  }
-  const conn = await db.integrationConnection.findUnique({
-    where: { id: connectionId },
-  });
-  if (!conn) throw new NotFoundError("Connection not found");
-  // Verify the actor is authorized (project lead/steward/admin for project-scoped connections)
-  if (conn.subjectKind === "project") {
-    const ctx = await loadProjectContext(conn.subjectId, actorId);
-    if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
-      throw new NotFoundError("Connection not found");
-    }
-  }
-  if (conn.status === "revoked") {
-    throw new ConflictError("Connection is already revoked");
-  }
-  // G09-P2 Gap 3: atomic — state change + job cancellation + audit in one tx.
-  await db.$transaction(async (tx) => {
-    const result = await tx.integrationConnection.updateMany({
-      where: { id: connectionId, status: { not: "revoked" } },
-      data: { status: "revoked", revokedAt: new Date(), revokedReason: reason },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Connection is no longer revocable (concurrent transition)");
-    }
-    // Cancel all queued/running jobs for this connection (same transaction)
-    await tx.integrationJob.updateMany({
-      where: { connectionId, status: { in: ["queued", "running"] } },
-      data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
-    });
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "connection.revoke",
-        targetType: "IntegrationConnection",
-        targetId: connectionId,
-        outcome: "success",
-        reason,
-      }),
-    });
-  });
-  logger.info("integrations.connection.revoked", { connectionId, actorId });
-  return { id: connectionId, status: "revoked" as const };
+  return withDeniedFailureAudit(
+    {
+      actorId,
+      action: "connection.revoke",
+      targetType: "IntegrationConnection",
+      targetId: connectionId,
+      hideTargetIdOnNotFound: true, // don't confirm connection existence to unauthorized users
+    },
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Revocation reason must be at least 10 characters");
+      }
+      const conn = await db.integrationConnection.findUnique({
+        where: { id: connectionId },
+      });
+      if (!conn) {
+        throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+      }
+      // Verify the actor is authorized (project lead/steward/admin for project-scoped connections)
+      if (conn.subjectKind === "project") {
+        const ctx = await loadProjectContext(conn.subjectId, actorId);
+        if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
+          // NotFound (not Forbidden) to avoid confirming connection existence
+          throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+        }
+      }
+      if (conn.status === "revoked") {
+        throw new ConflictError("Connection is already revoked", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + job cancellation + audit in one tx.
+      await db.$transaction(async (tx) => {
+        const result = await tx.integrationConnection.updateMany({
+          where: { id: connectionId, status: { not: "revoked" } },
+          data: { status: "revoked", revokedAt: new Date(), revokedReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Connection is no longer revocable (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        // Cancel all queued/running jobs for this connection (same transaction)
+        await tx.integrationJob.updateMany({
+          where: { connectionId, status: { in: ["queued", "running"] } },
+          data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
+        });
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "connection.revoke",
+            targetType: "IntegrationConnection",
+            targetId: connectionId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("integrations.connection.revoked", { connectionId, actorId });
+      return { id: connectionId, status: "revoked" as const };
+    },
+  );
 }
 
 export async function suspendConnection(connectionId: string, actorId: string, reason: string) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Suspension reason must be at least 10 characters");
-  }
-  const conn = await db.integrationConnection.findUnique({ where: { id: connectionId } });
-  if (!conn) throw new NotFoundError("Connection not found");
-  if (conn.subjectKind === "project") {
-    const ctx = await loadProjectContext(conn.subjectId, actorId);
-    if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
-      throw new NotFoundError("Connection not found");
-    }
-  }
-  if (conn.status !== "active") {
-    throw new ConflictError(`Connection is ${conn.status}; cannot suspend`);
-  }
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  await db.$transaction(async (tx) => {
-    const result = await tx.integrationConnection.updateMany({
-      where: { id: connectionId, status: "active" },
-      data: { status: "suspended", suspendedAt: new Date(), suspendedReason: reason },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Connection is no longer active (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId,
-        action: "connection.suspend",
-        targetType: "IntegrationConnection",
-        targetId: connectionId,
-        outcome: "success",
-        reason,
-      }),
-    });
-  });
-  logger.info("integrations.connection.suspended", { connectionId, actorId });
-  return { id: connectionId, status: "suspended" as const };
+  return withDeniedFailureAudit(
+    {
+      actorId,
+      action: "connection.suspend",
+      targetType: "IntegrationConnection",
+      targetId: connectionId,
+      hideTargetIdOnNotFound: true,
+    },
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Suspension reason must be at least 10 characters");
+      }
+      const conn = await db.integrationConnection.findUnique({ where: { id: connectionId } });
+      if (!conn) {
+        throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+      }
+      if (conn.subjectKind === "project") {
+        const ctx = await loadProjectContext(conn.subjectId, actorId);
+        if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
+          throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+        }
+      }
+      if (conn.status !== "active") {
+        throw new ConflictError(`Connection is ${conn.status}; cannot suspend`, {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.integrationConnection.updateMany({
+          where: { id: connectionId, status: "active" },
+          data: { status: "suspended", suspendedAt: new Date(), suspendedReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Connection is no longer active (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "connection.suspend",
+            targetType: "IntegrationConnection",
+            targetId: connectionId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("integrations.connection.suspended", { connectionId, actorId });
+      return { id: connectionId, status: "suspended" as const };
+    },
+  );
 }
 
 export async function listConnections(projectId: string, actorId: string) {
