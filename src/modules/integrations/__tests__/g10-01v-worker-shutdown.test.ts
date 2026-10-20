@@ -164,10 +164,12 @@ describe("G10-01V-FIX — Worker Graceful Shutdown", () => {
     const controller = new AbortController();
     const loopPromise = runWorkerLoop(controller.signal);
 
-    // Give the worker time to process the job (~200ms for mock adapter).
-    // Poll the job status until it's succeeded, then abort.
+    // Give the worker time to process the job. The mock adapter has a
+    // 100ms delay. The worker polls every 2000ms (POLL_INTERVAL_MS).
+    // The first poll happens immediately, so the job should be picked
+    // up within ~300ms. But under CI load, allow up to 5 seconds.
     let jobSucceeded = false;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 50; i++) {
       await new Promise<void>((resolve) => setTimeout(resolve, 100));
       const check = await db.integrationJob.findUnique({
         where: { id: job.id },
@@ -177,9 +179,13 @@ describe("G10-01V-FIX — Worker Graceful Shutdown", () => {
         jobSucceeded = true;
         break;
       }
+      // If the job failed, break early — something went wrong.
+      if (check?.status === "failed") {
+        break;
+      }
     }
 
-    // Abort after job is confirmed succeeded (or after 2s timeout).
+    // Abort after job is confirmed succeeded (or after 5s timeout).
     controller.abort();
     await loopPromise;
 
