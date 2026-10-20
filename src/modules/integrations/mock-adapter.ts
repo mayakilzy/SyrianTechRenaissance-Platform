@@ -30,7 +30,8 @@ const MOCK_PROVIDER_ID = "str.mock.v1";
 const CAPABILITY_DELAYS: Record<string, number> = {
   "application.test": 100,        // 100ms — fast
   "application.slow": 5000,      // 5s — slow (used for timeout tests)
-  "application.failing": 100,   // 100ms then fails
+  "application.failing": 100,   // 100ms then fails (retryable)
+  "application.permanent_fail": 100, // 100ms then fails (NON-retryable) — G09-P2
 };
 
 class MockAdapter implements IntegrationAdapter {
@@ -55,13 +56,25 @@ class MockAdapter implements IntegrationAdapter {
     // Simulate the job execution delay
     await new Promise((resolve) => setTimeout(resolve, delay));
 
-    // Simulate failure for "failing" capability
+    // Simulate failure for "failing" capability (retryable)
     if (params.capability === "application.failing") {
       return {
         status: "failed",
         failureCategory: "provider_error",
         failureMessage: "Mock provider returned a simulated failure",
         retryable: true,
+      };
+    }
+
+    // Simulate PERMANENT failure for "permanent_fail" capability (NON-retryable)
+    // Used by G09-P2 Outbox Reliability tests to verify the worker marks the
+    // job as failed + dispatches the outbox event + does NOT retry.
+    if (params.capability === "application.permanent_fail") {
+      return {
+        status: "failed",
+        failureCategory: "provider_error",
+        failureMessage: "Mock provider returned a PERMANENT (non-retryable) failure",
+        retryable: false,
       };
     }
 

@@ -27,6 +27,7 @@
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { buildAuditData } from "@/lib/audit";
 import {
   ValidationError,
   NotFoundError,
@@ -332,14 +333,14 @@ export async function decideComplaint(
     }
     // Audit event
     await tx.auditEvent.create({
-      data: {
+      data: buildAuditData({
         actorId: deciderId,
         action: `moderation.${valid.data.action.toLowerCase()}`,
         targetType: "ModerationComplaint",
         targetId: complaintId,
         outcome: "success",
         reason: valid.data.reason,
-      },
+      }),
     });
     return { decision, newStatus };
   });

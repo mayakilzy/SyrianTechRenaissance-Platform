@@ -35,6 +35,8 @@
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { buildAuditData } from "@/lib/audit";
+import { withDeniedFailureAudit } from "@/lib/audit-denied";
 import {
   ValidationError,
   NotFoundError,
@@ -46,6 +48,7 @@ import { z } from "zod/v4";
 import { Prisma } from "@prisma/client";
 import { notify } from "@/modules/notifications/service";
 import { isVerifiedRepresentative, isAdmin, isPartnershipManager } from "@/modules/organizations/service";
+import { loadProjectContext } from "@/modules/projects/service";
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -289,14 +292,14 @@ export async function decidePartnershipRequest(
     }
     // Audit event
     await tx.auditEvent.create({
-      data: {
+      data: buildAuditData({
         actorId: deciderId,
         action: `partnership.${valid.data.action.toLowerCase()}`,
         targetType: "PartnershipRequest",
         targetId: requestId,
         outcome: "success",
         reason: valid.data.reason,
-      },
+      }),
     });
     return { decision, newStatus };
   });
@@ -496,14 +499,14 @@ export async function suspendAgreementReliance(
     },
   });
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "partnership.agreement_suspend",
       targetType: "PartnershipRequest",
       targetId: requestId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("partnerships.agreement.suspended", { requestId, actorId });
   return { id: requestId, agreementSuspendedAt: result.agreementSuspendedAt };
@@ -534,58 +537,116 @@ export async function submitRightsDeclaration(
   declarerId: string,
   input: RightsDeclarationInput,
 ) {
-  const valid = rightsDeclarationSchema.safeParse(input);
-  if (!valid.success) {
-    const fields: Record<string, string[]> = {};
-    for (const issue of valid.error.issues) {
-      (fields[issue.path.join(".") || "_"] ??= []).push(issue.message);
-    }
-    throw new ValidationError("Invalid rights declaration data", fields);
-  }
-  const contribution = await db.contributionReference.findUnique({
-    where: { id: contributionId },
-    include: { contributor: { select: { id: true, displayName: true, email: true } } },
-  });
-  if (!contribution) throw new NotFoundError("Contribution not found");
-  // Authorization: contributor OR admin
-  const admin = await isAdmin(declarerId);
-  if (contribution.contributorId !== declarerId && !admin) {
-    throw new ForbiddenError("Only the contributor or an admin can submit a rights declaration");
-  }
-  // One declaration per contribution (unique constraint)
-  const existing = await db.contributionRightsDeclaration.findUnique({
-    where: { contributionId },
-  });
-  if (existing) {
-    throw new ConflictError("A rights declaration already exists for this contribution");
-  }
-  const declaration = await db.contributionRightsDeclaration.create({
-    data: {
-      contributionId,
-      declaredById: declarerId,
-      declarationType: valid.data.declarationType,
-      declarationText: valid.data.declarationText,
-      evidenceStorageKey: valid.data.evidenceStorageKey || null,
-      evidenceScanStatus: valid.data.evidenceStorageKey ? "PENDING" : null,
-    },
-  });
-  await db.auditEvent.create({
-    data: {
+  return withDeniedFailureAudit(
+    {
       actorId: declarerId,
       action: "rights.declare",
       targetType: "ContributionReference",
       targetId: contributionId,
-      outcome: "success",
-      reason: `Declared as ${valid.data.declarationType}`,
+      hideTargetIdOnNotFound: true, // don't confirm contribution existence to NON-PARTICIPANTS
     },
-  });
-  logger.info("partnerships.rights.declared", {
-    declarationId: declaration.id,
-    contributionId,
-    declarationType: valid.data.declarationType,
-    declarerId,
-  });
-  return declaration;
+    async () => {
+      const valid = rightsDeclarationSchema.safeParse(input);
+      if (!valid.success) {
+        const fields: Record<string, string[]> = {};
+        for (const issue of valid.error.issues) {
+          (fields[issue.path.join(".") || "_"] ??= []).push(issue.message);
+        }
+        throw new ValidationError("Invalid rights declaration data", fields);
+      }
+      const contribution = await db.contributionReference.findUnique({
+        where: { id: contributionId },
+        include: { contributor: { select: { id: true, displayName: true, email: true } } },
+      });
+      if (!contribution) {
+        // Contribution doesn't exist — NotFoundError (entity doesn't exist).
+        throw new NotFoundError("Contribution not found", { auditReason: "entity_not_found" });
+      }
+
+      // G09-P2 FINAL ACCEPTANCE CHECK — Authorization Contract (per ChatGPT):
+      // The 404/403 decision depends on whether the declarer is a PROJECT
+      // PARTICIPANT (knows the resource exists) vs an OUTSIDER (doesn't).
+      //
+      //   - Contributor themselves → allowed (200)
+      //   - Admin → allowed (200)
+      //   - Project participant (lead/steward/member) who is NOT the
+      //     contributor → ForbiddenError (403): they KNOW the contribution
+      //     exists (they saw it in the project workspace), they just lack
+      //     the specific permission to declare rights. Confirming existence
+      //     leaks nothing because they already know.
+      //   - Outsider (not a project participant) → NotFoundError (404):
+      //     they DON'T know the contribution exists. Returning 403 would
+      //     confirm existence. Returning 404 reveals nothing.
+      //
+      // This is the G09-001 pattern applied with the participant/outsider
+      // distinction ChatGPT requested.
+      const admin = await isAdmin(declarerId);
+
+      if (contribution.contributorId !== declarerId && !admin) {
+        // Not the contributor and not an admin. Determine if the declarer
+        // is a project participant (lead/steward/member) — if so, they
+        // know the resource exists → 403. If not → 404 (existence hidden).
+        const ctx = await loadProjectContext(contribution.projectId, declarerId);
+        if (ctx && (ctx.isLead || ctx.isSteward || ctx.isMember)) {
+          // Project participant — knows the resource exists, just not
+          // authorized for THIS operation. ForbiddenError (403) is correct:
+          // it tells them "you can see it but can't act on it".
+          throw new ForbiddenError(
+            "Only the contributor or an admin can submit a rights declaration",
+            { auditReason: "insufficient_permissions" },
+          );
+        }
+        // Outsider — not a project participant. NotFoundError (404) hides
+        // the contribution's existence.
+        throw new NotFoundError("Contribution not found", { auditReason: "entity_not_found" });
+      }
+
+      // One declaration per contribution (unique constraint)
+      const existing = await db.contributionRightsDeclaration.findUnique({
+        where: { contributionId },
+      });
+      if (existing) {
+        throw new ConflictError("A rights declaration already exists for this contribution", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — declaration creation + audit in one transaction.
+      // Per ChatGPT review: rights declarations may carry legal/governance
+      // implications, so this is classified as HIGH-risk (moved from Group C
+      // to Group A). If the audit write fails, the declaration creation rolls
+      // back — no rights declaration without an audit trail.
+      const declaration = await db.$transaction(async (tx) => {
+        const created = await tx.contributionRightsDeclaration.create({
+          data: {
+            contributionId,
+            declaredById: declarerId,
+            declarationType: valid.data.declarationType,
+            declarationText: valid.data.declarationText,
+            evidenceStorageKey: valid.data.evidenceStorageKey || null,
+            evidenceScanStatus: valid.data.evidenceStorageKey ? "PENDING" : null,
+          },
+        });
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId: declarerId,
+            action: "rights.declare",
+            targetType: "ContributionReference",
+            targetId: contributionId,
+            outcome: "success",
+            reason: `Declared as ${valid.data.declarationType}`,
+          }),
+        });
+        return created;
+      });
+      logger.info("partnerships.rights.declared", {
+        declarationId: declaration.id,
+        contributionId,
+        declarationType: valid.data.declarationType,
+        declarerId,
+      });
+      return declaration;
+    },
+  );
 }
 
 /**

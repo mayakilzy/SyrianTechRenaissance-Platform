@@ -15,6 +15,8 @@
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { buildAuditData } from "@/lib/audit";
+import { withDeniedFailureAudit } from "@/lib/audit-denied";
 import {
   ValidationError,
   NotFoundError,
@@ -85,27 +87,57 @@ export async function listProviders(actorId: string) {
 }
 
 export async function approveProvider(providerId: string, approverId: string) {
-  if (!(await isAdmin(approverId))) {
-    throw new ForbiddenError("Only admins can approve providers");
-  }
-  const result = await db.integrationProvider.updateMany({
-    where: { id: providerId, trustStatus: "registered" },
-    data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
-  });
-  if (result.count === 0) {
-    throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
-  }
-  await db.auditEvent.create({
-    data: {
+  // G09-P2 Gap 2: wrap with denied/failure audit. If the operation throws
+  // ForbiddenError (non-admin) or ConflictError (already approved / concurrent),
+  // a denied/failure audit event is written OUTSIDE the transaction.
+  //
+  // G09-P2 FIX 2 (per ChatGPT review): the service layer sets
+  // meta.auditReason explicitly when throwing — classification no longer
+  // depends on fragile message.includes() matching. See audit-denied.ts.
+  return withDeniedFailureAudit(
+    {
       actorId: approverId,
       action: "provider.approve",
       targetType: "IntegrationProvider",
       targetId: providerId,
-      outcome: "success",
     },
-  });
-  logger.info("integrations.provider.approved", { providerId, approverId });
-  return { id: providerId, trustStatus: "approved" as const };
+    async () => {
+      if (!(await isAdmin(approverId))) {
+        // Explicit auditReason — classification is stable regardless of
+        // the human-readable message wording.
+        throw new ForbiddenError("Only admins can approve providers", {
+          auditReason: "insufficient_permissions",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.integrationProvider.updateMany({
+          where: { id: providerId, trustStatus: "registered" },
+          data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
+        });
+        if (result.count === 0) {
+          // Explicit auditReason: this ConflictError IS security-relevant
+          // (governance operation optimistic-lock conflict). Without
+          // meta.auditReason, regular ConflictErrors are NOT audited
+          // (per ChatGPT point #3).
+          throw new ConflictError("Provider is not in 'registered' status (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId: approverId,
+            action: "provider.approve",
+            targetType: "IntegrationProvider",
+            targetId: providerId,
+            outcome: "success",
+          }),
+        });
+      });
+      logger.info("integrations.provider.approved", { providerId, approverId });
+      return { id: providerId, trustStatus: "approved" as const };
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -188,83 +220,124 @@ export async function createConnection(creatorId: string, input: ConnectionCreat
 }
 
 export async function revokeConnection(connectionId: string, actorId: string, reason: string) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Revocation reason must be at least 10 characters");
-  }
-  const conn = await db.integrationConnection.findUnique({
-    where: { id: connectionId },
-  });
-  if (!conn) throw new NotFoundError("Connection not found");
-  // Verify the actor is authorized (project lead/steward/admin for project-scoped connections)
-  if (conn.subjectKind === "project") {
-    const ctx = await loadProjectContext(conn.subjectId, actorId);
-    if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
-      throw new NotFoundError("Connection not found");
-    }
-  }
-  if (conn.status === "revoked") {
-    throw new ConflictError("Connection is already revoked");
-  }
-  const result = await db.integrationConnection.updateMany({
-    where: { id: connectionId, status: { not: "revoked" } },
-    data: { status: "revoked", revokedAt: new Date(), revokedReason: reason },
-  });
-  if (result.count === 0) {
-    throw new ConflictError("Connection is no longer revocable (concurrent transition)");
-  }
-  // Cancel all queued/running jobs for this connection
-  await db.integrationJob.updateMany({
-    where: { connectionId, status: { in: ["queued", "running"] } },
-    data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
-  });
-  await db.auditEvent.create({
-    data: {
+  return withDeniedFailureAudit(
+    {
       actorId,
       action: "connection.revoke",
       targetType: "IntegrationConnection",
       targetId: connectionId,
-      outcome: "success",
-      reason,
+      hideTargetIdOnNotFound: true, // don't confirm connection existence to unauthorized users
     },
-  });
-  logger.info("integrations.connection.revoked", { connectionId, actorId });
-  return { id: connectionId, status: "revoked" as const };
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Revocation reason must be at least 10 characters");
+      }
+      const conn = await db.integrationConnection.findUnique({
+        where: { id: connectionId },
+      });
+      if (!conn) {
+        throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+      }
+      // Verify the actor is authorized (project lead/steward/admin for project-scoped connections)
+      if (conn.subjectKind === "project") {
+        const ctx = await loadProjectContext(conn.subjectId, actorId);
+        if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
+          // NotFound (not Forbidden) to avoid confirming connection existence
+          throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+        }
+      }
+      if (conn.status === "revoked") {
+        throw new ConflictError("Connection is already revoked", {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + job cancellation + audit in one tx.
+      await db.$transaction(async (tx) => {
+        const result = await tx.integrationConnection.updateMany({
+          where: { id: connectionId, status: { not: "revoked" } },
+          data: { status: "revoked", revokedAt: new Date(), revokedReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Connection is no longer revocable (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        // Cancel all queued/running jobs for this connection (same transaction)
+        await tx.integrationJob.updateMany({
+          where: { connectionId, status: { in: ["queued", "running"] } },
+          data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
+        });
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "connection.revoke",
+            targetType: "IntegrationConnection",
+            targetId: connectionId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("integrations.connection.revoked", { connectionId, actorId });
+      return { id: connectionId, status: "revoked" as const };
+    },
+  );
 }
 
 export async function suspendConnection(connectionId: string, actorId: string, reason: string) {
-  if (reason.trim().length < 10) {
-    throw new ValidationError("Suspension reason must be at least 10 characters");
-  }
-  const conn = await db.integrationConnection.findUnique({ where: { id: connectionId } });
-  if (!conn) throw new NotFoundError("Connection not found");
-  if (conn.subjectKind === "project") {
-    const ctx = await loadProjectContext(conn.subjectId, actorId);
-    if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
-      throw new NotFoundError("Connection not found");
-    }
-  }
-  if (conn.status !== "active") {
-    throw new ConflictError(`Connection is ${conn.status}; cannot suspend`);
-  }
-  const result = await db.integrationConnection.updateMany({
-    where: { id: connectionId, status: "active" },
-    data: { status: "suspended", suspendedAt: new Date(), suspendedReason: reason },
-  });
-  if (result.count === 0) {
-    throw new ConflictError("Connection is no longer active (concurrent transition)");
-  }
-  await db.auditEvent.create({
-    data: {
+  return withDeniedFailureAudit(
+    {
       actorId,
       action: "connection.suspend",
       targetType: "IntegrationConnection",
       targetId: connectionId,
-      outcome: "success",
-      reason,
+      hideTargetIdOnNotFound: true,
     },
-  });
-  logger.info("integrations.connection.suspended", { connectionId, actorId });
-  return { id: connectionId, status: "suspended" as const };
+    async () => {
+      if (reason.trim().length < 10) {
+        throw new ValidationError("Suspension reason must be at least 10 characters");
+      }
+      const conn = await db.integrationConnection.findUnique({ where: { id: connectionId } });
+      if (!conn) {
+        throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+      }
+      if (conn.subjectKind === "project") {
+        const ctx = await loadProjectContext(conn.subjectId, actorId);
+        if (!ctx || (!ctx.isLead && !ctx.isSteward && !ctx.isAdmin)) {
+          throw new NotFoundError("Connection not found", { auditReason: "entity_not_found" });
+        }
+      }
+      if (conn.status !== "active") {
+        throw new ConflictError(`Connection is ${conn.status}; cannot suspend`, {
+          auditReason: "invalid_state_transition",
+        });
+      }
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.integrationConnection.updateMany({
+          where: { id: connectionId, status: "active" },
+          data: { status: "suspended", suspendedAt: new Date(), suspendedReason: reason },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Connection is no longer active (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId,
+            action: "connection.suspend",
+            targetType: "IntegrationConnection",
+            targetId: connectionId,
+            outcome: "success",
+            reason,
+          }),
+        });
+      });
+      logger.info("integrations.connection.suspended", { connectionId, actorId });
+      return { id: connectionId, status: "suspended" as const };
+    },
+  );
 }
 
 export async function listConnections(projectId: string, actorId: string) {

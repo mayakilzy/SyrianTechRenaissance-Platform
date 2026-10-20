@@ -377,11 +377,11 @@ describe("G06-A — Rights declarations (NOT IP transfer)", () => {
     expect(audit).toBeTruthy();
   });
 
-  it("prevents non-contributor from submitting a rights declaration", async () => {
+  it("prevents non-contributor from submitting a rights declaration — OUTSIDER gets NotFound (entity existence hidden)", async () => {
     run = startTestRun();
     const adminId = await createTestUser(run, "admin");
     const contributorId = await createTestUser(run, "member");
-    const otherId = await createTestUser(run, "member");
+    const outsiderId = await createTestUser(run, "member"); // not a project participant
     // Same setup as above
     const proposal = await db.projectProposal.create({
       data: { submitterId: contributorId, title: `Test ${run.runId}`, status: "APPROVED", submittedAt: new Date(), approvedAt: new Date() },
@@ -402,9 +402,60 @@ describe("G06-A — Rights declarations (NOT IP transfer)", () => {
     const contribution = await db.contributionReference.create({
       data: { deliverableId: deliverable.id, projectId: project.id, contributorId, acceptedById: adminId, acceptedVersion: 1, attributionText: "X" },
     });
-    // otherId (not the contributor, not admin) tries to declare rights
+    // outsiderId (not the contributor, not admin, NOT a project participant)
+    // tries to declare rights.
+    //
+    // G09-P2 FINAL ACCEPTANCE CHECK (per ChatGPT):
+    //   - Outsider does NOT know the contribution exists (no project access).
+    //   - NotFoundError (404) hides entity existence — G09-001 pattern.
+    //   - ForbiddenError (403) would confirm existence → security leak.
     await expect(
-      submitRightsDeclaration(contribution.id, otherId, {
+      submitRightsDeclaration(contribution.id, outsiderId, {
+        declarationType: "ATTRIBUTION_ONLY",
+        declarationText: "Trying to declare rights on someone else's contribution.",
+      }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("prevents non-contributor from submitting a rights declaration — PROJECT PARTICIPANT gets Forbidden (knows resource exists)", async () => {
+    run = startTestRun();
+    const adminId = await createTestUser(run, "admin");
+    const contributorId = await createTestUser(run, "member");
+    const participantId = await createTestUser(run, "member"); // project participant (team member)
+    // Setup: contributor owns the contribution, participantId is a team member
+    const proposal = await db.projectProposal.create({
+      data: { submitterId: contributorId, title: `Test ${run.runId}`, status: "APPROVED", submittedAt: new Date(), approvedAt: new Date() },
+    });
+    const project = await db.project.create({
+      data: { proposalId: proposal.id, leadId: contributorId, stewardId: adminId, title: `Test ${run.runId}`, status: "ACTIVE" },
+    });
+    run.proposalIds.push(proposal.id);
+    run.projectIds.push(project.id);
+    const team = await db.team.create({ data: { projectId: project.id, name: `T ${run.runId}` } });
+    await db.teamMembership.create({ data: { teamId: team.id, userId: contributorId, role: "LEAD" } });
+    // participantId is a team MEMBER — they can see the project workspace,
+    // so they KNOW the contribution exists. They just lack the specific
+    // permission to declare rights (only contributor or admin can).
+    await db.teamMembership.create({ data: { teamId: team.id, userId: participantId, role: "MEMBER" } });
+    const task = await db.task.create({
+      data: { projectId: project.id, assigneeId: contributorId, assignedById: adminId, title: "T", description: "Desc." },
+    });
+    const deliverable = await db.deliverable.create({
+      data: { taskId: task.id, submitterId: contributorId, status: "ACCEPTED", currentVersion: 1, acceptedAt: new Date() },
+    });
+    const contribution = await db.contributionReference.create({
+      data: { deliverableId: deliverable.id, projectId: project.id, contributorId, acceptedById: adminId, acceptedVersion: 1, attributionText: "X" },
+    });
+    // participantId (project participant, not the contributor, not admin)
+    // tries to declare rights.
+    //
+    // G09-P2 FINAL ACCEPTANCE CHECK (per ChatGPT):
+    //   - Participant KNOWS the contribution exists (they saw it in the
+    //     project workspace via team membership).
+    //   - ForbiddenError (403) is correct: "you can see it but can't act".
+    //   - NotFoundError (404) would be misleading (they already know).
+    await expect(
+      submitRightsDeclaration(contribution.id, participantId, {
         declarationType: "ATTRIBUTION_ONLY",
         declarationText: "Trying to declare rights on someone else's contribution.",
       }),
