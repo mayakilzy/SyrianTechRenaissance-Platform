@@ -48,6 +48,7 @@ import { z } from "zod/v4";
 import { Prisma } from "@prisma/client";
 import { notify } from "@/modules/notifications/service";
 import { isVerifiedRepresentative, isAdmin, isPartnershipManager } from "@/modules/organizations/service";
+import { loadProjectContext } from "@/modules/projects/service";
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -542,7 +543,7 @@ export async function submitRightsDeclaration(
       action: "rights.declare",
       targetType: "ContributionReference",
       targetId: contributionId,
-      hideTargetIdOnNotFound: true, // don't confirm contribution existence to unauthorized users
+      hideTargetIdOnNotFound: true, // don't confirm contribution existence to NON-PARTICIPANTS
     },
     async () => {
       const valid = rightsDeclarationSchema.safeParse(input);
@@ -558,14 +559,48 @@ export async function submitRightsDeclaration(
         include: { contributor: { select: { id: true, displayName: true, email: true } } },
       });
       if (!contribution) {
+        // Contribution doesn't exist — NotFoundError (entity doesn't exist).
         throw new NotFoundError("Contribution not found", { auditReason: "entity_not_found" });
       }
-      // Authorization: contributor OR admin
+
+      // G09-P2 FINAL ACCEPTANCE CHECK — Authorization Contract (per ChatGPT):
+      // The 404/403 decision depends on whether the declarer is a PROJECT
+      // PARTICIPANT (knows the resource exists) vs an OUTSIDER (doesn't).
+      //
+      //   - Contributor themselves → allowed (200)
+      //   - Admin → allowed (200)
+      //   - Project participant (lead/steward/member) who is NOT the
+      //     contributor → ForbiddenError (403): they KNOW the contribution
+      //     exists (they saw it in the project workspace), they just lack
+      //     the specific permission to declare rights. Confirming existence
+      //     leaks nothing because they already know.
+      //   - Outsider (not a project participant) → NotFoundError (404):
+      //     they DON'T know the contribution exists. Returning 403 would
+      //     confirm existence. Returning 404 reveals nothing.
+      //
+      // This is the G09-001 pattern applied with the participant/outsider
+      // distinction ChatGPT requested.
       const admin = await isAdmin(declarerId);
+
       if (contribution.contributorId !== declarerId && !admin) {
-        // NotFound (not Forbidden) to avoid confirming contribution existence
+        // Not the contributor and not an admin. Determine if the declarer
+        // is a project participant (lead/steward/member) — if so, they
+        // know the resource exists → 403. If not → 404 (existence hidden).
+        const ctx = await loadProjectContext(contribution.projectId, declarerId);
+        if (ctx && (ctx.isLead || ctx.isSteward || ctx.isMember)) {
+          // Project participant — knows the resource exists, just not
+          // authorized for THIS operation. ForbiddenError (403) is correct:
+          // it tells them "you can see it but can't act on it".
+          throw new ForbiddenError(
+            "Only the contributor or an admin can submit a rights declaration",
+            { auditReason: "insufficient_permissions" },
+          );
+        }
+        // Outsider — not a project participant. NotFoundError (404) hides
+        // the contribution's existence.
         throw new NotFoundError("Contribution not found", { auditReason: "entity_not_found" });
       }
+
       // One declaration per contribution (unique constraint)
       const existing = await db.contributionRightsDeclaration.findUnique({
         where: { contributionId },
