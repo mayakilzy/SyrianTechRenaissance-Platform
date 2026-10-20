@@ -165,12 +165,26 @@ describe("G10-01V-FIX — Worker Graceful Shutdown", () => {
     const loopPromise = runWorkerLoop(controller.signal);
 
     // Give the worker time to process the job (~200ms for mock adapter).
-    // Then abort after 1 second.
-    setTimeout(() => controller.abort(), 1000);
+    // Poll the job status until it's succeeded, then abort.
+    let jobSucceeded = false;
+    for (let i = 0; i < 20; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      const check = await db.integrationJob.findUnique({
+        where: { id: job.id },
+        select: { status: true },
+      });
+      if (check?.status === "succeeded") {
+        jobSucceeded = true;
+        break;
+      }
+    }
 
+    // Abort after job is confirmed succeeded (or after 2s timeout).
+    controller.abort();
     await loopPromise;
 
     // CRITICAL: the job should have been processed (status = succeeded).
+    expect(jobSucceeded).toBe(true);
     const finalJob = await db.integrationJob.findUnique({ where: { id: job.id } });
     expect(finalJob?.status).toBe("succeeded");
     expect(finalJob?.finishedAt).toBeTruthy();

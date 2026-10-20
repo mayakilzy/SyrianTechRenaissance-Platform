@@ -23,6 +23,11 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 COPY . .
 RUN bunx prisma generate
+# Provide minimal env for Next.js build (config.ts validates at import time).
+# DATABASE_URL is required by Zod schema; provide a dummy for build only.
+# The real DATABASE_URL is injected at runtime via docker-compose env_file.
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
+ENV AUTH_SECRET="build-placeholder-secret-at-least-16-chars"
 RUN bun run build
 
 # ---- Production runtime ----
