@@ -58,10 +58,13 @@ jobs:
         run: |
           set -euo pipefail
           # Start the web server in detached mode.
-          # The standalone Next.js server binds to port 3000 by default.
-          # We map it to 3001 on the host.
+          # CRITICAL: Next.js standalone server.js binds to 'localhost' by default,
+          # which inside a container only listens on 127.0.0.1 — unreachable from
+          # the host via port mapping. We set HOSTNAME=0.0.0.0 to bind all interfaces.
           docker run --rm -d --name str-web-test \
             -e NODE_ENV=production \
+            -e HOSTNAME=0.0.0.0 \
+            -e PORT=3000 \
             -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
             -e AUTH_SECRET="ci-placeholder-secret-at-least-16-chars" \
             -p 3001:3000 \
@@ -78,7 +81,7 @@ jobs:
             exit 1
           fi
 
-          echo "=== Container logs (startup) ==="
+          echo "=== Container is running. Startup logs: ==="
           docker logs str-web-test 2>&1 || true
 
           # Bounded polling: wait up to 20s for the health endpoint.
