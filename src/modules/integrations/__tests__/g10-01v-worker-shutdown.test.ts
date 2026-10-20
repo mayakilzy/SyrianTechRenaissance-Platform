@@ -116,42 +116,37 @@ describe("G10-01V-FIX — Worker Graceful Shutdown", () => {
     run.proposalIds.push(proposal.id);
     run.projectIds.push(project.id);
 
-    // Create a unique provider for this test.
-    const providerId = `str.mock.shutdown-${run.runId}`;
-    await db.integrationProvider.create({
-      data: {
-        id: providerId,
-        slug: providerId,
-        version: "v1",
-        displayName: "Worker Shutdown Test Provider",
-        description: "Provider for worker shutdown test",
-        owner: "STR Platform",
-        baseOrigin: "https://mock.str.local",
-        trustStatus: "registered",
-        authMode: { type: "none" },
-        isMock: true,
+    // Use the SHARED str.mock.v1 provider — the mock adapter's getAdapter()
+    // only returns the adapter when providerId === MOCK_PROVIDER_ID ("str.mock.v1").
+    // A unique provider would cause "adapter_not_found" and the job would fail.
+    // We use the atomic transaction pattern from g07-webhook-worker.test.ts
+    // to reset + approve the shared provider.
+    const provider = await db.integrationProvider.upsert({
+      where: { id: "str.mock.v1" },
+      update: { isMock: true },
+      create: {
+        id: "str.mock.v1", slug: "str.mock", version: "v1",
+        displayName: "STR Mock Provider", description: "Mock", owner: "STR",
+        baseOrigin: "https://mock.str.local", trustStatus: "registered",
+        authMode: { type: "none" }, isMock: true,
       },
     });
-    uniqueProviderIds.push(providerId);
-
-    // Reset and approve (using the atomic transaction pattern).
     await db.integrationProvider.update({
-      where: { id: providerId },
+      where: { id: provider.id },
       data: { trustStatus: "registered", approvedById: null, approvedAt: null },
     });
-    await approveProvider(providerId, adminId);
-
+    await approveProvider(provider.id, adminId);
     await db.integrationCapability.upsert({
-      where: { providerId_code: { providerId, code: "application.test" } },
+      where: { providerId_code: { providerId: provider.id, code: "application.test" } },
       update: {},
       create: {
-        providerId, code: "application.test", summary: "Test",
+        providerId: provider.id, code: "application.test", summary: "Test",
         executionMode: "async", riskClass: "low", requiredScopes: ["test"],
         inputSchemaRef: "ref", outputSchemaRef: "ref", idempotent: true, cancelable: true, timeoutMs: 30000,
       },
     });
 
-    const conn = await createConnection(leadId, { providerId, projectId: project.id, scopes: ["test"] });
+    const conn = await createConnection(leadId, { providerId: provider.id, projectId: project.id, scopes: ["test"] });
     const job = await submitJob(leadId, {
       connectionId: conn.connection.id,
       capability: "application.test",
