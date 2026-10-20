@@ -58,13 +58,48 @@ import { NotFoundError, ForbiddenError } from "@/lib/errors";
 let run: TestRun;
 
 afterEach(async () => {
-  if (run) await cleanupTestRun(run);
+  if (run) {
+    // Clean up unique providers created by this test run.
+    // cleanupTestRun doesn't delete providers (they're not in its scope),
+    // so we handle it here. The shared "str.mock.v1" is NOT touched.
+    const providerIds = (run as TestRun & { providerIds?: string[] }).providerIds ?? [];
+    if (providerIds.length > 0) {
+      // Delete capabilities + connections + provider for each unique provider.
+      for (const pid of providerIds) {
+        const conns = await db.integrationConnection.findMany({
+          where: { providerId: pid },
+          select: { id: true },
+        });
+        const connIds = conns.map((c) => c.id);
+        if (connIds.length > 0) {
+          const jobs = await db.integrationJob.findMany({
+            where: { connectionId: { in: connIds } },
+            select: { id: true },
+          });
+          const jobIds = jobs.map((j) => j.id);
+          if (jobIds.length > 0) {
+            await db.outboxEvent.deleteMany({ where: { aggregateId: { in: jobIds } } });
+            await db.integrationEvent.deleteMany({ where: { jobId: { in: jobIds } } });
+            await db.integrationJob.deleteMany({ where: { id: { in: jobIds } } });
+          }
+          await db.integrationConnection.deleteMany({ where: { id: { in: connIds } } });
+        }
+        await db.integrationCapability.deleteMany({ where: { providerId: pid } });
+        await db.integrationProvider.deleteMany({ where: { id: pid } });
+      }
+    }
+    await cleanupTestRun(run);
+  }
 });
 
 /**
- * Setup helper: create a project + approved mock provider.
- * Reuses the explicit reset pattern from g09-outbox-reliability.test.ts
- * to ensure every test gets a freshly-approved provider with its own adminId.
+ * Setup helper: create a project + UNIQUE approved provider per test run.
+ *
+ * G09-P2 fix: use a UNIQUE provider ID per test run (str.mock.audit-<runId>)
+ * instead of the shared "str.mock.v1". This completely avoids shared-state
+ * pollution between test files. The mock adapter is NOT needed for audit
+ * tests (we don't submit jobs); we only need a provider record that's
+ * approved so createConnection() succeeds.
  */
 async function setupProjectWithProvider() {
   const adminId = await createTestUser(run, "admin");
@@ -94,15 +129,15 @@ async function setupProjectWithProvider() {
   run.proposalIds.push(proposal.id);
   run.projectIds.push(project.id);
 
-  const provider = await db.integrationProvider.upsert({
-    where: { id: "str.mock.v1" },
-    update: { isMock: true },
-    create: {
-      id: "str.mock.v1",
-      slug: "str.mock",
+  // Create a UNIQUE provider per test run — no shared state.
+  const providerId = `str.mock.audit-${run.runId}`;
+  const provider = await db.integrationProvider.create({
+    data: {
+      id: providerId,
+      slug: `str.mock.audit-${run.runId}`,
       version: "v1",
-      displayName: "STR Mock Provider",
-      description: "Mock",
+      displayName: `STR Mock Audit Provider ${run.runId}`,
+      description: "Mock provider for audit testing",
       owner: "STR",
       baseOrigin: "https://mock.str.local",
       trustStatus: "registered",
@@ -110,17 +145,9 @@ async function setupProjectWithProvider() {
       isMock: true,
     },
   });
-  // Force reset to "registered" so approveProvider's updateMany matches.
-  await db.integrationProvider.update({
-    where: { id: provider.id },
-    data: { trustStatus: "registered", approvedById: null, approvedAt: null },
-  });
-  await approveProvider(provider.id, adminId);
 
-  await db.integrationCapability.upsert({
-    where: { providerId_code: { providerId: provider.id, code: "application.test" } },
-    update: {},
-    create: {
+  await db.integrationCapability.create({
+    data: {
       providerId: provider.id,
       code: "application.test",
       summary: "Test capability",
@@ -134,6 +161,15 @@ async function setupProjectWithProvider() {
       timeoutMs: 30000,
     },
   });
+
+  // Approve the unique provider with the current test's adminId.
+  await approveProvider(provider.id, adminId);
+
+  // Track providerId for cleanup (add to run so cleanupTestRun can find it).
+  // Note: cleanupTestRun doesn't delete providers, so we handle it in afterEach
+  // via a custom cleanup. For now, we rely on the unique ID to avoid conflicts.
+  (run as TestRun & { providerIds?: string[] }).providerIds ??= [];
+  (run as TestRun & { providerIds?: string[] }).providerIds!.push(providerId);
 
   return { projectId: project.id, leadId, adminId, providerId: provider.id };
 }
@@ -290,20 +326,37 @@ describe("G09 Priority 2 — Audit Event Integrity", () => {
   // The approveProvider function takes `approverId` as a parameter. A non-admin
   // cannot call it — they get ForbiddenError, and NO audit event is created.
   // This verifies the actor identity is enforced server-side.
+  //
+  // Since we use a UNIQUE provider per test run, the provider starts in
+  // "registered" state (from setupProjectWithProvider's create + approve).
+  // We create a SECOND unique provider to test the non-admin approval path.
   // ───────────────────────────────────────────────────────────────────────
   it("actor identity enforced server-side: non-admin cannot trigger audit event", async () => {
     run = startTestRun();
-    const { adminId, providerId } = await setupProjectWithProvider();
+    const { adminId } = await setupProjectWithProvider();
     const memberId = await createTestUser(run, "member");
 
-    // Reset provider to "registered" so a new approval can be attempted
-    await db.integrationProvider.update({
-      where: { id: providerId },
-      data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+    // Create a SECOND unique provider in "registered" state for this test.
+    const provider2Id = `str.mock.audit-nonadmin-${run.runId}`;
+    await db.integrationProvider.create({
+      data: {
+        id: provider2Id,
+        slug: `str.mock.audit-nonadmin-${run.runId}`,
+        version: "v1",
+        displayName: `STR Mock Audit Non-Admin Provider ${run.runId}`,
+        description: "Mock provider for non-admin approval test",
+        owner: "STR",
+        baseOrigin: "https://mock.str.local",
+        trustStatus: "registered",
+        authMode: { type: "none" },
+        isMock: true,
+      },
     });
+    (run as TestRun & { providerIds?: string[] }).providerIds ??= [];
+    (run as TestRun & { providerIds?: string[] }).providerIds!.push(provider2Id);
 
     // Member tries to approve → ForbiddenError
-    await expect(approveProvider(providerId, memberId)).rejects.toThrow(ForbiddenError);
+    await expect(approveProvider(provider2Id, memberId)).rejects.toThrow(ForbiddenError);
 
     // CRITICAL: NO audit event was created for the failed attempt
     const failedAudit = await db.auditEvent.findFirst({
@@ -315,7 +368,7 @@ describe("G09 Priority 2 — Audit Event Integrity", () => {
     expect(failedAudit).toBeNull();
 
     // The provider is still "registered" (not approved)
-    const provider = await db.integrationProvider.findUnique({ where: { id: providerId } });
+    const provider = await db.integrationProvider.findUnique({ where: { id: provider2Id } });
     expect(provider?.trustStatus).toBe("registered");
   });
 
