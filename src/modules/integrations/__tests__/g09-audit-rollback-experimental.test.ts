@@ -40,7 +40,6 @@ import {
   createTestUser,
   type TestRun,
 } from "@/modules/organizations/__tests__/test-isolation";
-import { createProposal, submitProposal, reviewProposal } from "@/modules/proposals/service";
 
 let run: TestRun;
 const uniqueProviderIds: string[] = [];
@@ -68,31 +67,6 @@ describe("G09-P2 Gap 3 — Experimental Rollback Test", () => {
   it("db.$transaction rolls back state change when callback throws (simulated audit-write failure)", async () => {
     run = startTestRun();
     const adminId = await createTestUser(run, "admin");
-    const stewardId = await createTestUser(run, "admin");
-    const leadId = await createTestUser(run, "rep");
-
-    // Create a project so we can use it as context (not strictly needed,
-    // but matches the real-world flow).
-    const proposal = await createProposal({
-      submitterId: leadId,
-      title: `Rollback Test ${run.runId}`,
-      charter: {
-        problemStatement: "Test problem statement with sufficient length for validation purposes here.",
-        outcomes: "Test outcomes with sufficient length for validation purposes here.",
-        scope: "Test scope with sufficient length for validation purposes here.",
-        requiredSkills: ["TypeScript"],
-        acceptanceCriteria: "Test acceptance criteria with sufficient length for validation here.",
-      },
-    });
-    await submitProposal(proposal.id, leadId);
-    await reviewProposal({
-      proposalId: proposal.id,
-      reviewerId: adminId,
-      action: "APPROVE",
-      reason: "Approved for rollback test.",
-      stewardId,
-    });
-    run.proposalIds.push(proposal.id);
 
     // Create a unique provider in "registered" state.
     const providerId = `str.mock.rollback-${run.runId}`;
@@ -187,7 +161,7 @@ describe("G09-P2 Gap 3 — Experimental Rollback Test", () => {
       expect(result.count).toBe(1);
 
       // Simulate the audit write (in approveProvider, this is
-      // tx.auditEvent.create — here we use db.auditEvent.create directly
+      // tx.auditEvent.create — here we use tx.auditEvent.create directly
       // since we just need to prove both writes commit together).
       await tx.auditEvent.create({
         data: {
