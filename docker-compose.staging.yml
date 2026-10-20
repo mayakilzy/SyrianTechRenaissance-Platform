@@ -32,13 +32,21 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: str-staging-postgres
+    # G10-01V-FIX: password comes from .env.staging (POSTGRES_PASSWORD).
+    # No hardcoded password. If not set, PostgreSQL will refuse to start.
     environment:
       POSTGRES_USER: str
-      POSTGRES_PASSWORD: str_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.staging}
       POSTGRES_DB: str_platform
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
-    ports:
-      - "5432:5432"
+    # G10-01V-FIX: do NOT expose PostgreSQL port to the host.
+    # Database communication stays inside the Compose network only.
+    # Remove the ports section entirely — app and worker connect via
+    # the internal service name "postgres:5432".
+    # If external access is needed for debugging, use:
+    #   docker compose exec postgres psql -U str -d str_platform
+    expose:
+      - "5432"
     volumes:
       - str-staging-pgdata:/var/lib/postgresql/data
     healthcheck:

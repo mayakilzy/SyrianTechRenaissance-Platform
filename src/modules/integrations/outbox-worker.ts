@@ -217,20 +217,60 @@ export async function checkTimeouts(): Promise<number> {
   return timedOut.count;
 }
 
-export async function runWorkerLoop(): Promise<void> {
-  logger.info("outbox.worker.start", { workerId: WORKER_ID });
-  
-  while (true) {
+/**
+ * Run the outbox worker loop until the abort signal fires.
+ *
+ * G10-01V-FIX: graceful shutdown via AbortSignal.
+ * - SIGTERM/SIGINT triggers abort → loop exits after current iteration.
+ * - No new job is claimed after abort is requested.
+ * - The poll sleep is interruptible (resolves immediately on abort).
+ * - In-flight job processing completes naturally; the lease mechanism
+ *   ensures recovery if the process is killed before completion.
+ * - After the loop exits, the function returns (worker exits cleanly).
+ *
+ * @param signal Optional AbortSignal. When aborted, the loop stops.
+ *               If not provided, the loop runs forever (backwards compat
+ *               for tests that call runWorkerLoop() directly).
+ */
+export async function runWorkerLoop(signal?: AbortSignal): Promise<void> {
+  logger.info("outbox.worker.start", { workerId: WORKER_ID, hasAbortSignal: !!signal });
+
+  while (!signal?.aborted) {
     try {
       await recoverAbandonedJobs();
       await checkTimeouts();
       const hadJob = await processNextOutboxEvent();
-      if (!hadJob) await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      if (!hadJob) {
+        // Interruptible sleep: if the signal fires during the poll
+        // interval, resolve immediately so the loop can exit.
+        if (signal) {
+          await Promise.race([
+            new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS)),
+            new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            }),
+          ]);
+        } else {
+          await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      }
     } catch (e) {
       logger.error("outbox.worker.error", { error: e instanceof Error ? e.message : String(e) });
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      // Even on error, respect the abort signal during the error sleep.
+      if (signal) {
+        await Promise.race([
+          new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS)),
+          new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          }),
+        ]);
+      } else {
+        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
     }
   }
+
+  logger.info("outbox.worker.shutdown.complete", { workerId: WORKER_ID });
 }
 
 if (require.main === module) {
