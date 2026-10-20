@@ -15,6 +15,7 @@
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { buildAuditData } from "@/lib/audit";
 import {
   ValidationError,
   NotFoundError,
@@ -96,13 +97,13 @@ export async function approveProvider(providerId: string, approverId: string) {
     throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId: approverId,
       action: "provider.approve",
       targetType: "IntegrationProvider",
       targetId: providerId,
       outcome: "success",
-    },
+    }),
   });
   logger.info("integrations.provider.approved", { providerId, approverId });
   return { id: providerId, trustStatus: "approved" as const };
