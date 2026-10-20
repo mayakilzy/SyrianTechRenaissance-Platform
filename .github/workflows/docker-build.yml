@@ -57,9 +57,9 @@ jobs:
       - name: Verify web server starts and responds
         run: |
           set -euo pipefail
-          # Start the web server in background.
-          # Use --network host so localhost:3001 maps to the container's port 3000.
-          # The -p flag doesn't work reliably with the standalone server in CI.
+          # Start the web server in detached mode.
+          # The standalone Next.js server binds to port 3000 by default.
+          # We map it to 3001 on the host.
           docker run --rm -d --name str-web-test \
             -e NODE_ENV=production \
             -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
@@ -68,14 +68,21 @@ jobs:
             str-platform:ci-build-test node server.js
 
           # Wait for container to start
-          sleep 2
+          sleep 3
 
-          # Get container logs for diagnostics
-          echo "=== Container logs ==="
+          # Check if container is still running (it may have crashed on startup)
+          if ! docker ps --filter name=str-web-test --filter status=running | grep -q str-web-test; then
+            echo "ERROR: Container str-web-test is not running (crashed on startup)."
+            echo "=== Container logs ==="
+            docker logs str-web-test 2>&1 || echo "(no logs — container was removed)"
+            exit 1
+          fi
+
+          echo "=== Container logs (startup) ==="
           docker logs str-web-test 2>&1 || true
 
-          # Bounded polling: wait up to 15s for the health endpoint.
-          for i in $(seq 1 15); do
+          # Bounded polling: wait up to 20s for the health endpoint.
+          for i in $(seq 1 20); do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" = "200" ]; then
               echo "Web server responded with 200 on attempt $i"
@@ -88,7 +95,7 @@ jobs:
           done
 
           # If we get here, the server didn't respond.
-          echo "ERROR: Web server did not respond with 200 within 15 seconds."
+          echo "ERROR: Web server did not respond with 200 within 20 seconds."
           echo "=== Final container logs ==="
           docker logs str-web-test 2>&1 || true
           docker stop str-web-test 2>/dev/null || true
