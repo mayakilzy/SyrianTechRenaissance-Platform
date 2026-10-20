@@ -402,13 +402,17 @@ describe("G06-A — Rights declarations (NOT IP transfer)", () => {
     const contribution = await db.contributionReference.create({
       data: { deliverableId: deliverable.id, projectId: project.id, contributorId, acceptedById: adminId, acceptedVersion: 1, attributionText: "X" },
     });
-    // otherId (not the contributor, not admin) tries to declare rights
+    // otherId (not the contributor, not admin) tries to declare rights.
+    // G09-P2 Gap 2: changed from ForbiddenError to NotFoundError to avoid
+    // confirming the contribution exists to unauthorized users (G09-001
+    // pattern — entity existence protection). The non-contributor learns
+    // nothing about whether the contribution exists.
     await expect(
       submitRightsDeclaration(contribution.id, otherId, {
         declarationType: "ATTRIBUTION_ONLY",
         declarationText: "Trying to declare rights on someone else's contribution.",
       }),
-    ).rejects.toThrow(ForbiddenError);
+    ).rejects.toThrow(NotFoundError);
   });
 
   it("prevents duplicate rights declarations (one per contribution)", async () => {
