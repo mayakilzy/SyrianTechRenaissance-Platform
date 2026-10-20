@@ -58,6 +58,8 @@ jobs:
         run: |
           set -euo pipefail
           # Start the web server in background.
+          # Use --network host so localhost:3001 maps to the container's port 3000.
+          # The -p flag doesn't work reliably with the standalone server in CI.
           docker run --rm -d --name str-web-test \
             -e NODE_ENV=production \
             -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
@@ -65,20 +67,30 @@ jobs:
             -p 3001:3000 \
             str-platform:ci-build-test node server.js
 
+          # Wait for container to start
+          sleep 2
+
+          # Get container logs for diagnostics
+          echo "=== Container logs ==="
+          docker logs str-web-test 2>&1 || true
+
           # Bounded polling: wait up to 15s for the health endpoint.
           for i in $(seq 1 15); do
-            if curl -sf http://localhost:3001/api/v1/health > /dev/null 2>&1; then
-              echo "Web server responded on attempt $i"
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Web server responded with 200 on attempt $i"
               curl -s http://localhost:3001/api/v1/health | python3 -m json.tool
               docker stop str-web-test 2>/dev/null || true
               exit 0
             fi
+            echo "Attempt $i: HTTP $HTTP_CODE, waiting..."
             sleep 1
           done
 
           # If we get here, the server didn't respond.
-          echo "ERROR: Web server did not respond within 15 seconds."
-          docker logs str-web-test 2>/dev/null || true
+          echo "ERROR: Web server did not respond with 200 within 15 seconds."
+          echo "=== Final container logs ==="
+          docker logs str-web-test 2>&1 || true
           docker stop str-web-test 2>/dev/null || true
           exit 1
 
