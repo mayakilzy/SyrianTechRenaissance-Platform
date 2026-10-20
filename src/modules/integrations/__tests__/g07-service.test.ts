@@ -71,20 +71,13 @@ async function setupProjectWithAdmin() {
 
 async function setupMockProvider(adminId: string) {
   // Use upsert to handle the case where the provider already exists from seed.
-  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval fields
-  // on update, so this test re-approves the provider with ITS OWN adminId.
-  // Without this, a prior test (e.g. g09-outbox-reliability or g07-webhook-worker)
-  // may have approved the shared provider and then had its admin user deleted
-  // by cleanup — leaving approvedById=null but trustStatus="approved". This
-  // test would then skip approval and fail the approvedById assertion.
+  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval fields,
+  // then re-approve with the CURRENT test's adminId. Uses a SEPARATE update call
+  // (not the upsert's update clause) for the reset, to guarantee the reset is
+  // applied before approveProvider runs.
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
-    update: {
-      isMock: true,
-      trustStatus: "registered",
-      approvedById: null,
-      approvedAt: null,
-    },
+    update: { isMock: true },
     create: {
       id: "str.mock.v1",
       slug: "str.mock",
@@ -98,6 +91,13 @@ async function setupMockProvider(adminId: string) {
       isMock: true,
     },
   });
+  // Force reset to "registered" so approveProvider's updateMany matches.
+  await db.integrationProvider.update({
+    where: { id: provider.id },
+    data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+  });
+  // Always re-approve with the current test's adminId.
+  await approveProvider(provider.id, adminId);
   // Ensure the capability exists (upsert)
   await db.integrationCapability.upsert({
     where: { providerId_code: { providerId: provider.id, code: "application.test" } },
@@ -116,10 +116,6 @@ async function setupMockProvider(adminId: string) {
       timeoutMs: 30000,
     },
   });
-  // Approve the provider if not already approved
-  if (provider.trustStatus !== "approved") {
-    await approveProvider(provider.id, adminId);
-  }
   return provider.id;
 }
 

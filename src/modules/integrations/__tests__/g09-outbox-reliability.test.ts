@@ -92,19 +92,13 @@ async function setupProjectWithProvider() {
   run.projectIds.push(project.id);
 
   // Ensure mock provider exists + is approved
-  // G09-P2 fix: reset trustStatus to "registered" + clear approval fields on
-  // update so this test re-approves with ITS OWN adminId. This prevents test
-  // pollution: if a prior test approved the provider with a different admin
-  // whose user was then deleted by cleanup, approvedById would be null and
-  // subsequent tests that check approvedById would fail.
+  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval
+  // fields, then re-approve with the CURRENT test's adminId. Uses a SEPARATE
+  // update call (not the upsert's update clause) for the reset, to guarantee
+  // the reset is applied before approveProvider runs.
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
-    update: {
-      isMock: true,
-      trustStatus: "registered",
-      approvedById: null,
-      approvedAt: null,
-    },
+    update: { isMock: true },
     create: {
       id: "str.mock.v1",
       slug: "str.mock",
@@ -118,6 +112,13 @@ async function setupProjectWithProvider() {
       isMock: true,
     },
   });
+  // Force reset to "registered" so approveProvider's updateMany matches.
+  await db.integrationProvider.update({
+    where: { id: provider.id },
+    data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+  });
+  // Always re-approve with the current test's adminId.
+  await approveProvider(provider.id, adminId);
 
   // Register capabilities needed by Phase B tests
   const capabilities = [
@@ -143,8 +144,6 @@ async function setupProjectWithProvider() {
       },
     });
   }
-
-  if (provider.trustStatus !== "approved") await approveProvider(provider.id, adminId);
 
   return { projectId: project.id, leadId, adminId, providerId: provider.id };
 }

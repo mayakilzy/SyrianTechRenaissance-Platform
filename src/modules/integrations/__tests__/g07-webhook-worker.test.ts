@@ -48,18 +48,14 @@ async function setupProjectWithProvider() {
   run.projectIds.push(project.id);
 
   // Ensure mock provider exists + is approved
-  // G09-P2 fix: reset trustStatus to "registered" + clear approval fields on
-  // update so this test re-approves with ITS OWN adminId. Without this, a
-  // prior test may have approved the shared provider with a different admin
-  // whose user was then deleted by cleanup (approvedById=null).
+  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval
+  // fields, then re-approve with the CURRENT test's adminId. This ensures
+  // every test gets a freshly-approved provider regardless of prior state.
+  // Uses a SEPARATE update call (not the upsert's update clause) for the
+  // reset, to guarantee the reset is applied before approveProvider runs.
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
-    update: {
-      isMock: true,
-      trustStatus: "registered",
-      approvedById: null,
-      approvedAt: null,
-    },
+    update: { isMock: true },
     create: {
       id: "str.mock.v1", slug: "str.mock", version: "v1",
       displayName: "STR Mock Provider", description: "Mock", owner: "STR",
@@ -67,6 +63,13 @@ async function setupProjectWithProvider() {
       authMode: { type: "none" }, isMock: true,
     },
   });
+  // Force reset to "registered" so approveProvider's updateMany matches.
+  await db.integrationProvider.update({
+    where: { id: provider.id },
+    data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+  });
+  // Always re-approve with the current test's adminId.
+  await approveProvider(provider.id, adminId);
   await db.integrationCapability.upsert({
     where: { providerId_code: { providerId: provider.id, code: "application.test" } },
     update: {},
@@ -76,7 +79,6 @@ async function setupProjectWithProvider() {
       inputSchemaRef: "ref", outputSchemaRef: "ref", idempotent: true, cancelable: true, timeoutMs: 30000,
     },
   });
-  if (provider.trustStatus !== "approved") await approveProvider(provider.id, adminId);
   return { projectId: project.id, leadId, adminId, providerId: provider.id };
 }
 
