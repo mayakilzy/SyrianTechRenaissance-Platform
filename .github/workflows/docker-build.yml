@@ -57,8 +57,11 @@ jobs:
       - name: Verify web server starts and responds
         run: |
           set -euo pipefail
-          # Start the web server in detached mode WITHOUT --rm so we can
-          # capture logs even if it crashes. We'll clean up manually.
+          # Create a dummy preview-props.json to prevent ENOENT on startup.
+          # Next.js 16.x tries to read this file at runtime; it's not always
+          # generated during build. This is a known issue with standalone output.
+          # The file is empty JSON — it's only read for preview mode which we
+          # don't use in production.
           docker run -d --name str-web-test \
             -e NODE_ENV=production \
             -e HOSTNAME=0.0.0.0 \
@@ -66,7 +69,7 @@ jobs:
             -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
             -e AUTH_SECRET="ci-placeholder-secret-at-least-16-chars" \
             -p 3001:3000 \
-            str-platform:ci-build-test node server.js
+            str-platform:ci-build-test sh -c 'echo "{}" > .next/server/preview-props.json && node server.js'
 
           # Wait for container to start
           sleep 5
