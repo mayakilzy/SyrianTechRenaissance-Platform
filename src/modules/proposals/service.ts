@@ -168,16 +168,25 @@ export async function submitProposal(proposalId: string, submitterId: string) {
   if (!proposal.currentRevision) {
     throw new UnprocessableEntityError("Proposal has no charter revision");
   }
-  await db.$transaction([
-    db.projectProposal.update({
-      where: { id: proposalId },
+  // G09-P2 (Concurrency): Optimistic lock — only flip status if the row is
+  // still in a submittable state. Without this, two concurrent submit()
+  // calls (double-click) could BOTH pass the status check above; if a
+  // reviewer approves between the two submits, the second submit would
+  // overwrite APPROVED → SUBMITTED and orphan the Project+Team.
+  // Pattern matches approveProposalAtomically (updateMany WHERE status).
+  await db.$transaction(async (tx) => {
+    const updated = await tx.projectProposal.updateMany({
+      where: { id: proposalId, status: { in: ["DRAFT", "NEEDS_REVISION"] } },
       data: { status: "SUBMITTED", submittedAt: new Date() },
-    }),
-    db.charterRevision.update({
-      where: { id: proposal.currentRevision.id },
+    });
+    if (updated.count === 0) {
+      throw new ConflictError("Proposal is not in a submittable status");
+    }
+    await tx.charterRevision.update({
+      where: { id: proposal.currentRevision!.id },
       data: { isSubmitted: true },
-    }),
-  ]);
+    });
+  });
   logger.info("proposals.submitted", { proposalId, submitterId });
 }
 
@@ -235,10 +244,21 @@ export async function withdrawProposal(proposalId: string, submitterId: string) 
   if (proposal.status === "APPROVED" || proposal.status === "REJECTED") {
     throw new ConflictError(`Cannot withdraw proposal in status ${proposal.status}`);
   }
-  await db.projectProposal.update({
-    where: { id: proposalId },
+  // G09-P2 (Concurrency): Optimistic lock — only withdraw if still in a
+  // withdrawable state. Without this, a concurrent APPROVE could flip
+  // status from SUBMITTED → APPROVED (creating Project+Team), and then
+  // this withdraw would overwrite APPROVED → WITHDRAWN — orphaning the
+  // Project+Team. Pattern matches approveProposalAtomically.
+  const updated = await db.projectProposal.updateMany({
+    where: {
+      id: proposalId,
+      status: { in: ["DRAFT", "SUBMITTED", "NEEDS_REVISION"] },
+    },
     data: { status: "WITHDRAWN", withdrawnAt: new Date() },
   });
+  if (updated.count === 0) {
+    throw new ConflictError("Proposal is not in a withdrawable status");
+  }
   logger.info("proposals.withdrawn", { proposalId, submitterId });
 }
 
@@ -315,11 +335,26 @@ export async function reviewProposal(input: ReviewInput) {
     // StewardAssignment + TeamMembership all in ONE transaction.
     await approveProposalAtomically(proposal, input);
   } else if (input.action === "REJECT") {
-    // Reject: record decision + update status in one transaction.
+    // G09-P2 (Concurrency): Optimistic lock — only reject if still SUBMITTED.
+    // Without this, a concurrent APPROVE could flip status from SUBMITTED →
+    // APPROVED (creating Project+Team), and then this REJECT would overwrite
+    // APPROVED → REJECTED — orphaning the Project+Team AND recording a
+    // ReviewDecision that contradicts the actual final state. The
+    // optimistic-lock check MUST come BEFORE creating the ReviewDecision so
+    // that a race-loss leaves ZERO audit side effects (no orphan decision).
+    // Pattern matches approveProposalAtomically.
     if (!proposal.currentRevisionId) {
       throw new UnprocessableEntityError("Proposal has no current revision");
     }
     await db.$transaction(async (tx) => {
+      const updated = await tx.projectProposal.updateMany({
+        where: { id: input.proposalId, status: "SUBMITTED" },
+        data: { status: "REJECTED", rejectedAt: new Date() },
+      });
+      if (updated.count === 0) {
+        throw new ConflictError("Proposal is not in SUBMITTED status");
+      }
+      // Now safe to record the ReviewDecision — the status transition succeeded.
       await tx.reviewDecision.create({
         data: {
           proposalId: input.proposalId,
@@ -330,17 +365,22 @@ export async function reviewProposal(input: ReviewInput) {
           isSelfReview: false,
         },
       });
-      await tx.projectProposal.update({
-        where: { id: input.proposalId },
-        data: { status: "REJECTED", rejectedAt: new Date() },
-      });
     });
   } else if (input.action === "REQUEST_REVISION") {
-    // Request revision: record decision + update status.
+    // G09-P2 (Concurrency): Optimistic lock — only request revision if still
+    // SUBMITTED. Same rationale as REJECT above: prevents a concurrent
+    // APPROVE from being overwritten, and prevents an orphaned ReviewDecision.
     if (!proposal.currentRevisionId) {
       throw new UnprocessableEntityError("Proposal has no current revision");
     }
     await db.$transaction(async (tx) => {
+      const updated = await tx.projectProposal.updateMany({
+        where: { id: input.proposalId, status: "SUBMITTED" },
+        data: { status: "NEEDS_REVISION" },
+      });
+      if (updated.count === 0) {
+        throw new ConflictError("Proposal is not in SUBMITTED status");
+      }
       await tx.reviewDecision.create({
         data: {
           proposalId: input.proposalId,
@@ -350,10 +390,6 @@ export async function reviewProposal(input: ReviewInput) {
           reason: input.reason,
           isSelfReview: false,
         },
-      });
-      await tx.projectProposal.update({
-        where: { id: input.proposalId },
-        data: { status: "NEEDS_REVISION" },
       });
     });
   }
@@ -542,6 +578,21 @@ export async function requestScopeChange(
   const lastVersion = proposal.revisions[0]?.version ?? 0;
 
   await db.$transaction(async (tx) => {
+    // G09-P2 (Concurrency): Optimistic lock — only flip status if still
+    // APPROVED. Without this, two concurrent scope-change requests could
+    // BOTH pass the status check above, BOTH create new CharterRevisions
+    // (with the same version → P2002 leak), AND both record audit
+    // ReviewDecisions. The optimistic lock MUST come before creating the
+    // revision + decision so a race-loss leaves ZERO side effects.
+    // Pattern matches approveProposalAtomically.
+    const updated = await tx.projectProposal.updateMany({
+      where: { id: proposalId, status: "APPROVED" },
+      data: { status: "NEEDS_REVISION" },
+    });
+    if (updated.count === 0) {
+      throw new ConflictError("Proposal is not in APPROVED status");
+    }
+
     const revision = await tx.charterRevision.create({
       data: {
         proposalId,
@@ -553,13 +604,10 @@ export async function requestScopeChange(
       },
     });
 
-    // Set the proposal to NEEDS_REVISION — the scope change must be re-approved.
+    // Update the current revision pointer (status already flipped above).
     await tx.projectProposal.update({
       where: { id: proposalId },
-      data: {
-        currentRevisionId: revision.id,
-        status: "NEEDS_REVISION",
-      },
+      data: { currentRevisionId: revision.id },
     });
 
     // Record the scope change request as a review decision (for audit).
