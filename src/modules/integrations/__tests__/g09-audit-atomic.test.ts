@@ -117,13 +117,14 @@ describe("G09-P2 Gap 3 — Atomic Success Audit", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // Test 2: optimistic lock conflict — state change fails, no audit
+  // Test 2: optimistic lock conflict — state change fails, failure audit written
   //
-  // If the provider is already "approved" (concurrent transition), the
-  // updateMany returns count=0, the transaction throws ConflictError,
-  // and NO audit event is created.
+  // Post-Gap 2: a failure audit IS written for optimistic-lock conflicts
+  // (outcome="failure", reason="optimistic_lock_conflict"). The state
+  // change still rolls back (no approval). The failure audit persists
+  // because it's written OUTSIDE the rolled-back transaction.
   // ─────────────────────────────────────────────────────────────────────
-  it("optimistic lock conflict: no state change, no audit event", async () => {
+  it("optimistic lock conflict: no state change, failure audit written (Gap 2)", async () => {
     run = startTestRun();
     const adminId = await createTestUser(run, "admin");
 
@@ -150,11 +151,13 @@ describe("G09-P2 Gap 3 — Atomic Success Audit", () => {
     // approveProvider should throw ConflictError
     await expect(approveProvider(providerId, adminId)).rejects.toThrow(ConflictError);
 
-    // CRITICAL: no new AuditEvent was created (the transaction rolled back)
+    // CRITICAL (Gap 2): a FAILURE audit event IS written (optimistic lock conflict)
     const audits = await db.auditEvent.findMany({
       where: { action: "provider.approve", targetId: providerId },
     });
-    expect(audits.length).toBe(0);
+    expect(audits.length).toBe(1);
+    expect(audits[0]?.outcome).toBe("failure");
+    expect(audits[0]?.reason).toBe("optimistic_lock_conflict");
 
     // State is unchanged
     const provider = await db.integrationProvider.findUnique({ where: { id: providerId } });
@@ -207,10 +210,12 @@ describe("G09-P2 Gap 3 — Atomic Success Audit", () => {
   //
   // Two concurrent calls to approveProvider on the same "registered"
   // provider: the optimistic lock ensures exactly one succeeds. The
-  // winner's transaction commits (state + audit); the loser's
-  // transaction rolls back (no state change, no audit).
+  // winner's transaction commits (state + success audit); the loser's
+  // transaction rolls back BUT a failure audit is written (Gap 2).
+  //
+  // Post-Gap 2: 2 audit events total (1 success + 1 failure).
   // ─────────────────────────────────────────────────────────────────────
-  it("concurrent approveProvider: exactly one wins, one audit event", async () => {
+  it("concurrent approveProvider: exactly one wins, 1 success + 1 failure audit (Gap 2)", async () => {
     run = startTestRun();
     const admin1Id = await createTestUser(run, "admin");
     const admin2Id = await createTestUser(run, "admin");
@@ -240,11 +245,17 @@ describe("G09-P2 Gap 3 — Atomic Success Audit", () => {
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
     expect(succeeded).toBe(1);
 
-    // CRITICAL: exactly ONE audit event (the winner's)
+    // CRITICAL (Gap 2): 2 audit events — 1 success (winner) + 1 failure (loser)
     const audits = await db.auditEvent.findMany({
       where: { action: "provider.approve", targetId: providerId },
     });
-    expect(audits.length).toBe(1);
+    expect(audits.length).toBe(2);
+
+    const successAudits = audits.filter((a) => a.outcome === "success");
+    const failureAudits = audits.filter((a) => a.outcome === "failure");
+    expect(successAudits.length).toBe(1);
+    expect(failureAudits.length).toBe(1);
+    expect(failureAudits[0]?.reason).toBe("optimistic_lock_conflict");
 
     // State is "approved" with the winner's adminId
     const provider = await db.integrationProvider.findUnique({ where: { id: providerId } });
@@ -253,16 +264,13 @@ describe("G09-P2 Gap 3 — Atomic Success Audit", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // Test 5: authorization still enforced (isAdmin check outside transaction)
+  // Test 5: authorization enforced + denied audit written (Gap 2)
   //
   // A non-admin calling approveProvider gets ForbiddenError BEFORE the
-  // transaction starts. No state change, no audit.
-  //
-  // We verify the OUTCOME (no state change, no audit) rather than spying
-  // on $transaction, because Prisma's prototype method doesn't respond
-  // reliably to vi.spyOn.
+  // transaction starts. No state change. But a DENIED audit event IS
+  // written (Gap 2: probing attacks leave a trail).
   // ─────────────────────────────────────────────────────────────────────
-  it("non-admin: ForbiddenError before transaction (no state change, no audit)", async () => {
+  it("non-admin: ForbiddenError before transaction, denied audit written (Gap 2)", async () => {
     run = startTestRun();
     const memberId = await createTestUser(run, "member");
 
@@ -290,10 +298,13 @@ describe("G09-P2 Gap 3 — Atomic Success Audit", () => {
     const provider = await db.integrationProvider.findUnique({ where: { id: providerId } });
     expect(provider?.trustStatus).toBe("registered");
 
-    // CRITICAL: no audit event created
+    // CRITICAL (Gap 2): a DENIED audit event IS written
     const audits = await db.auditEvent.findMany({
       where: { action: "provider.approve", targetId: providerId },
     });
-    expect(audits.length).toBe(0);
+    expect(audits.length).toBe(1);
+    expect(audits[0]?.outcome).toBe("denied");
+    expect(audits[0]?.reason).toBe("insufficient_permissions");
+    expect(audits[0]?.actorId).toBe(memberId);
   });
 });
