@@ -90,6 +90,10 @@ export async function approveProvider(providerId: string, approverId: string) {
   // G09-P2 Gap 2: wrap with denied/failure audit. If the operation throws
   // ForbiddenError (non-admin) or ConflictError (already approved / concurrent),
   // a denied/failure audit event is written OUTSIDE the transaction.
+  //
+  // G09-P2 FIX 2 (per ChatGPT review): the service layer sets
+  // meta.auditReason explicitly when throwing — classification no longer
+  // depends on fragile message.includes() matching. See audit-denied.ts.
   return withDeniedFailureAudit(
     {
       actorId: approverId,
@@ -99,7 +103,11 @@ export async function approveProvider(providerId: string, approverId: string) {
     },
     async () => {
       if (!(await isAdmin(approverId))) {
-        throw new ForbiddenError("Only admins can approve providers");
+        // Explicit auditReason — classification is stable regardless of
+        // the human-readable message wording.
+        throw new ForbiddenError("Only admins can approve providers", {
+          auditReason: "insufficient_permissions",
+        });
       }
       // G09-P2 Gap 3: atomic — state change + audit in one transaction.
       await db.$transaction(async (tx) => {
@@ -108,7 +116,13 @@ export async function approveProvider(providerId: string, approverId: string) {
           data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
         });
         if (result.count === 0) {
-          throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
+          // Explicit auditReason: this ConflictError IS security-relevant
+          // (governance operation optimistic-lock conflict). Without
+          // meta.auditReason, regular ConflictErrors are NOT audited
+          // (per ChatGPT point #3).
+          throw new ConflictError("Provider is not in 'registered' status (concurrent transition)", {
+            auditReason: "optimistic_lock_conflict",
+          });
         }
         await tx.auditEvent.create({
           data: buildAuditData({

@@ -1,156 +1,169 @@
 /**
- * STR Platform — Audit Denied/Failure Helper (Gap 2)
+ * STR Platform — Audit Denied/Failure Helper (Gap 2, revised)
  * ----------------------------------------------------
  * Writes denied/failure audit events OUTSIDE any rolled-back transaction.
  *
+ * REVISION HISTORY (per ChatGPT review):
+ *   v1 (original): classified errors by msg.includes("not owner") — fragile.
+ *                  Logged auditErr.message — risk of leaking DB internals.
+ *   v2 (current):  classification by stable code + explicit meta.auditReason.
+ *                  Safe diagnostic code in logs (no raw error messages).
+ *
  * CRITICAL DESIGN (denied-audit-trap):
  *   If we write outcome="denied" INSIDE the same transaction that gets
- *   rolled back (e.g., because the optimistic-lock check failed), the
- *   audit record is LOST when the transaction rolls back. This defeats
- *   the purpose of auditing denied attempts.
+ *   rolled back, the audit record is LOST. Solution: denied/failure
+ *   audits are written in a SEPARATE db.auditEvent.create call AFTER
+ *   the original transaction throws. This call commits independently.
  *
- *   Solution: denied/failure audits are written in a SEPARATE db.auditEvent.create
- *   call AFTER the original transaction throws. This call commits independently
- *   of the failed operation.
+ * CLASSIFICATION (FIX 2 — per ChatGPT point #2):
+ *   v1 used e.message.includes("not owner") — fragile (changing the
+ *   message wording would silently change the audit classification).
+ *   v2 uses TWO sources, in priority order:
+ *     1. meta.auditReason — explicit stable code set by the service
+ *        layer when throwing the error. This is the PREFERRED source:
+ *        the service knows the operational context and sets the code.
+ *     2. AppError.code — stable enum (STR_FORBIDDEN, STR_CONFLICT, etc.).
+ *        Used as a fallback when meta.auditReason is not set. Maps to
+ *        a generic reason code (insufficient_permissions for FORBIDDEN,
+ *        optimistic_lock_conflict for CONFLICT, etc.).
+ *   NO message-text matching. The message is for humans; the code is
+ *   for machines.
  *
- * SECURITY (per ChatGPT review):
- *   1. `denied` = authorization failure (ForbiddenError thrown BEFORE any
- *      state change). Always written for high-risk governance operations
- *      when a non-admin attempts them.
- *   2. `failure` = operational failure (ConflictError from optimistic lock,
- *      NotFoundError, ValidationError). NOT written for every ConflictError —
- *      only for governance operations where the failure itself is
- *      security-relevant (e.g., repeated denied attempts = probing pattern).
- *   3. NO raw error messages stored. Reason is a SAFE CODE from a whitelist.
- *   4. NO stack traces or secrets stored.
- *   5. Actor identity comes from the server-side session, never client input.
- *   6. Outcome is server-determined (denied vs failure), never client-supplied.
- *   7. No leakage of hidden entity existence: denied audit records the
- *      targetId only when the actor already knew it (e.g., they sent a
- *      request with the id). For unauthorized reads, we use targetId=null
- *      to avoid confirming the entity exists.
+ * CONFLICT/NOTFOUND POLICY (FIX 3 — per ChatGPT point #3):
+ *   - ForbiddenError → always audited as "denied" (authorization failure
+ *     is security-relevant: probing attacks).
+ *   - ConflictError → audited as "failure" ONLY when meta.auditReason is
+ *     set by the service (explicit opt-in). Regular ConflictErrors (e.g.,
+ *     duplicate submission) are NOT audited — they're operational, not
+ *     security-relevant.
+ *   - NotFoundError → audited as "failure" ONLY when meta.auditReason is
+ *     set. Regular NotFoundErrors (e.g., user mistypes a URL) are NOT
+ *     audited — they're noise.
+ *   - ValidationError → NOT audited by default (input validation failures
+ *     are operational noise, not security events). Service can opt in via
+ *     meta.auditReason if validation failure indicates probing.
  *
- * FAILURE POLICY (per ChatGPT point #3):
- *   If the DB is down and the denied/failure audit write itself fails,
- *   we cannot let that block the original operation's error response.
- *   The denied-audit write is wrapped in a catch that:
- *     - Logs loudly (logger.error) so monitoring/alerting can detect it.
- *     - Does NOT mask the original error (it's re-thrown).
- *     - Does NOT retry (would amplify load during DB outage).
- *   This is a documented limitation: during a total DB outage, denied
- *   attempts may not be audited. Monitoring must detect the logger.error
- *   spike and alert. This is the trade-off for not blocking the original
- *   operation's error response.
+ * LOG SAFETY (FIX 1 — per ChatGPT point #1):
+ *   If the denied-audit write itself fails, we log a SAFE diagnostic:
+ *     - A stable error code ("audit_write_failed")
+ *     - The reqId (for correlation with other logs)
+ *     - The action/targetType/targetId (already known to the caller)
+ *     - The intended outcome/reason (the safe code we were trying to write)
+ *   We do NOT log auditErr.message (may contain DB internals, connection
+ *   strings, or stack traces). The raw error is discarded after the
+ *   safe code is extracted; detailed diagnostics require separate
+ *   infrastructure (error reporter, not logger).
  */
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { buildAuditData, type AuditOutcome } from "@/lib/audit";
 import { getRequestContext } from "@/lib/request-context";
-import type { AppError } from "@/lib/errors";
+import type { AppError, AppErrorCode } from "@/lib/errors";
 
 /**
  * Whitelisted reason codes for denied/failure audits.
  * These are SAFE to store — no raw error messages, no PII, no secrets.
- *
- * Add new codes here when adding denied-audit to new operations.
- * The code MUST be a short snake_case identifier, NOT a free-form string.
  */
 const AUDIT_REASON_CODES = [
-  // Authorization denials
-  "insufficient_permissions", // non-admin attempted admin-only operation
-  "not_owner", // user attempted operation on resource they don't own
-  "not_team_member", // user attempted operation on project they're not part of
-  "conflict_of_interest", // user attempted to review/approve own resource
-  // Operational failures (security-relevant only)
-  "optimistic_lock_conflict", // concurrent transition — state changed mid-operation
-  "invalid_state_transition", // entity not in expected state for this operation
-  "not_found", // target entity doesn't exist (or actor lacks permission to see it)
-  "validation_error", // input validation failed (security-relevant for probing detection)
+  // Authorization denials (ForbiddenError)
+  "insufficient_permissions",
+  "not_owner",
+  "not_team_member",
+  "conflict_of_interest",
+  // Operational failures (ConflictError/NotFoundError — only when opted in)
+  "optimistic_lock_conflict",
+  "invalid_state_transition",
+  "entity_not_found",
+  "validation_failed_probing",
 ] as const;
 
 export type AuditReasonCode = (typeof AUDIT_REASON_CODES)[number];
 
 /**
- * Map an AppError to a safe reason code + outcome.
- * Returns null if the error type is NOT security-relevant (shouldn't be audited).
+ * Stable mapping from AppError.code to a generic AuditReasonCode.
+ * Used as a FALLBACK when meta.auditReason is not explicitly set.
  *
- * Per ChatGPT directive: "لا تحول كل ConflictError إلى حادثة أمنية" —
- * ConflictError is only audited when it's from a governance operation
- * (the caller decides by invoking this function). Regular ConflictErrors
- * from normal operations (e.g., duplicate submission) are NOT audited.
+ * NOTE: only ForbiddenError is mapped by default (authorization failures
+ * are always security-relevant). ConflictError/NotFoundError/ValidationError
+ * are NOT mapped here — they require explicit meta.auditReason opt-in
+ * from the service layer (per ChatGPT point #3).
+ */
+const CODE_FALLBACK: Partial<Record<AppErrorCode, AuditReasonCode>> = {
+  STR_FORBIDDEN: "insufficient_permissions",
+};
+
+/**
+ * Classify an error for denied/failure audit.
+ *
+ * Returns null if the error is NOT security-relevant (shouldn't be audited).
+ *
+ * Classification priority:
+ *   1. meta.auditReason — explicit stable code from the service layer.
+ *      This is the PREFERRED source: the service knows the operational
+ *      context (e.g., "this ConflictError is from an optimistic-lock check
+ *      on a governance operation, which IS security-relevant").
+ *   2. CODE_FALLBACK[code] — generic mapping for ForbiddenError only.
+ *
+ * NO message-text matching. The message is for humans; the code is for
+ * machines.
  */
 export function classifyErrorForAudit(
   e: unknown,
 ): { outcome: AuditOutcome; reason: AuditReasonCode } | null {
-  // Check if it's an AppError with a code property
   if (!e || typeof e !== "object" || !("code" in e)) {
-    // Unknown error type — don't audit (could leak internals)
     return null;
   }
   const appErr = e as AppError;
-  // ForbiddenError → denied (authorization failure)
-  if (appErr.code === "STR_FORBIDDEN") {
-    // Inspect the message to determine the specific reason code.
-    // This is safe because we control the messages in the service layer.
-    const msg = appErr.message.toLowerCase();
-    if (msg.includes("conflict of interest") || msg.includes("cannot review your own")) {
-      return { outcome: "denied", reason: "conflict_of_interest" };
-    }
-    if (msg.includes("not owner") || msg.includes("only the submitter")) {
-      return { outcome: "denied", reason: "not_owner" };
-    }
-    if (msg.includes("not team member") || msg.includes("not a participant")) {
-      return { outcome: "denied", reason: "not_team_member" };
-    }
-    // Default forbidden → insufficient_permissions
-    return { outcome: "denied", reason: "insufficient_permissions" };
+
+  // Source 1: explicit meta.auditReason (preferred — set by service layer)
+  const explicitReason = (appErr.meta as { auditReason?: unknown } | undefined)?.auditReason;
+  if (typeof explicitReason === "string" && AUDIT_REASON_CODES.includes(explicitReason as AuditReasonCode)) {
+    // Determine outcome from the error code:
+    // - ForbiddenError → denied
+    // - ConflictError/NotFoundError/ValidationError → failure
+    const outcome: AuditOutcome =
+      appErr.code === "STR_FORBIDDEN" ? "denied" : "failure";
+    return { outcome, reason: explicitReason as AuditReasonCode };
   }
-  // ConflictError → failure (operational, security-relevant for governance)
-  if (appErr.code === "STR_CONFLICT") {
-    const msg = appErr.message.toLowerCase();
-    if (msg.includes("concurrent transition") || msg.includes("not in") && msg.includes("status")) {
-      return { outcome: "failure", reason: "optimistic_lock_conflict" };
-    }
-    if (msg.includes("already") && (msg.includes("approved") || msg.includes("verified") || msg.includes("revoked"))) {
-      return { outcome: "failure", reason: "invalid_state_transition" };
-    }
-    // Other conflicts (e.g., duplicate submission) — not security-relevant
-    return null;
+
+  // Source 2: fallback mapping (ForbiddenError only)
+  const fallbackReason = CODE_FALLBACK[appErr.code];
+  if (fallbackReason) {
+    return { outcome: "denied", reason: fallbackReason };
   }
-  // NotFoundError → failure (entity doesn't exist OR actor lacks permission)
-  // Per ChatGPT: "لا تكشف وجود كيان مخفي" — we use targetId=null in the
-  // audit write for NotFoundError to avoid confirming the entity exists.
-  if (appErr.code === "STR_NOT_FOUND") {
-    return { outcome: "failure", reason: "not_found" };
-  }
-  // ValidationError → failure (input validation)
-  if (appErr.code === "STR_VALIDATION_ERROR") {
-    return { outcome: "failure", reason: "validation_error" };
-  }
-  // Other error types (internal errors, etc.) — don't audit
+
+  // ConflictError / NotFoundError / ValidationError WITHOUT explicit
+  // meta.auditReason → NOT audited (per ChatGPT point #3: don't turn
+  // every operational error into a security incident).
   return null;
 }
 
 /**
+ * Stable diagnostic code for the logger when the denied-audit write fails.
+ * This is the ONLY thing logged — no raw error message.
+ */
+const AUDIT_WRITE_FAILED_CODE = "audit_write_failed";
+
+/**
  * Write a denied/failure audit event OUTSIDE any transaction.
- *
- * This is the denied-audit-trap solution: the original operation's
- * transaction has already rolled back (or was never started for auth
- * failures). This call commits independently.
  *
  * SECURITY:
  *   - actorId is passed by the caller (always from server session)
  *   - action is the operation name (e.g., "provider.approve")
  *   - targetType is the entity type
- *   - targetId is the entity id (pass null for NotFoundError to avoid
- *     confirming entity existence)
+ *   - targetId is the entity id (null for hidden-entity protection)
  *   - outcome + reason come from classifyErrorForAudit()
  *
- * FAILURE POLICY:
- *   If this audit write itself fails (DB down), we:
- *     - Log loudly via logger.error (monitoring detects the spike)
- *     - Do NOT mask the original error (caller re-throws)
- *     - Do NOT retry (would amplify load)
+ * FAILURE POLICY (FIX 1 — per ChatGPT point #1):
+ *   If this audit write itself fails (DB down, constraint violation, etc.),
+ *   we log a SAFE diagnostic:
+ *     - stable code: "audit_write_failed"
+ *     - reqId (for correlation)
+ *     - the action/targetType/targetId we were trying to audit
+ *     - the intended outcome/reason (the safe code)
+ *   We do NOT log auditErr.message (may contain DB internals).
+ *   We do NOT mask the original error (caller re-throws).
+ *   We do NOT retry (would amplify load during DB outage).
  */
 export async function writeDeniedFailureAudit(params: {
   actorId: string;
@@ -171,20 +184,27 @@ export async function writeDeniedFailureAudit(params: {
         reason: params.reason, // safe code, not raw message
       }),
     });
-  } catch (auditErr) {
-    // DOCUMENTED LIMITATION: during DB outage, denied/failure audits may
-    // be lost. We log loudly so monitoring can detect the spike and alert.
-    // We do NOT mask the original error — the caller re-throws it.
-    // We do NOT retry — would amplify load during outage.
+  } catch {
+    // FIX 1: log ONLY safe diagnostic fields. Do NOT log the raw error
+    // message (auditErr.message may contain DB internals, connection
+    // strings, or stack traces). Detailed diagnostics require separate
+    // infrastructure (error reporter), not the logger.
     const reqId = getRequestContext()?.reqId ?? "no-req-id";
     logger.error("audit.denied_failure.write_failed", {
+      // Stable diagnostic code — safe to log
+      diagnosticCode: AUDIT_WRITE_FAILED_CODE,
+      // Correlation id — safe to log
       reqId,
-      action: params.action,
-      targetType: params.targetType,
-      targetId: params.targetId,
-      outcome: params.outcome,
-      reason: params.reason,
-      auditError: auditErr instanceof Error ? auditErr.message : String(auditErr),
+      // The audit we were trying to write — all safe fields
+      intendedAction: params.action,
+      intendedTargetType: params.targetType,
+      intendedTargetId: params.targetId,
+      intendedOutcome: params.outcome,
+      intendedReason: params.reason,
+      // NOTE: auditErr.message is intentionally NOT logged here.
+      // If detailed diagnostics are needed, a separate error-reporting
+      // channel (not the logger) should be used, with its own access
+      // controls and retention policy.
     });
   }
 }
@@ -196,17 +216,14 @@ export async function writeDeniedFailureAudit(params: {
  *   export async function approveProvider(providerId, approverId) {
  *     return withDeniedFailureAudit(
  *       { actorId: approverId, action: "provider.approve",
- *         targetType: "IntegrationProvider", targetId: providerId,
- *         hideTargetIdOnNotFound: false },
- *       async () => {
- *         // ... existing approveProvider logic (including the $transaction) ...
- *       },
+ *         targetType: "IntegrationProvider", targetId: providerId },
+ *       async () => { ... existing logic ... },
  *     );
  *   }
  *
  * The wrapper:
  *   1. Runs the operation.
- *   2. If it throws, classifies the error.
+ *   2. If it throws, classifies the error (by meta.auditReason or code).
  *   3. If the error is security-relevant (denied/failure), writes an audit
  *      event OUTSIDE the operation's transaction.
  *   4. Re-throws the original error.
@@ -229,10 +246,8 @@ export async function withDeniedFailureAudit<T>(
   } catch (e) {
     const classified = classifyErrorForAudit(e);
     if (classified) {
-      // For NotFoundError with hideTargetIdOnNotFound, use null to avoid
-      // confirming entity existence.
       const targetIdForAudit =
-        classified.reason === "not_found" && params.hideTargetIdOnNotFound
+        classified.reason === "entity_not_found" && params.hideTargetIdOnNotFound
           ? null
           : params.targetId;
 
@@ -245,7 +260,6 @@ export async function withDeniedFailureAudit<T>(
         reason: classified.reason,
       });
     }
-    // Re-throw the original error (do not mask it)
     throw e;
   }
 }

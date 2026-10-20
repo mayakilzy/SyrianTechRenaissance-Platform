@@ -275,4 +275,95 @@ describe("G09-P2 Gap 2 — Denied/Failure Audit", () => {
     // The outcome is server-determined ("denied"), not client-supplied
     expect(audit?.outcome).toBe("denied");
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 7: hideTargetIdOnNotFound hides entity existence
+  //
+  // Per ChatGPT directive: "لا تكشف وجود كيان مخفي عبر سجلات قابلة
+  // للقراءة من مستخدم غير مخول."
+  //
+  // We test the withDeniedFailureAudit wrapper directly with
+  // hideTargetIdOnNotFound=true + a NotFoundError with meta.auditReason.
+  // The audit should have targetId=null (entity existence hidden).
+  // ─────────────────────────────────────────────────────────────────────
+  it("hideTargetIdOnNotFound: targetId is null in audit (entity existence hidden)", async () => {
+    run = startTestRun();
+    const memberId = await createTestUser(run, "member");
+    const { NotFoundError } = await import("@/lib/errors");
+    const { withDeniedFailureAudit } = await import("@/lib/audit-denied");
+
+    // Simulate a NotFoundError with explicit auditReason (service opt-in).
+    // The service would set meta.auditReason = "entity_not_found" when it
+    // wants to audit a not-found attempt on a sensitive resource.
+    const sensitiveEntityId = `hidden-entity-${run.runId}`;
+
+    await expect(
+      withDeniedFailureAudit(
+        {
+          actorId: memberId,
+          action: "sensitive.read",
+          targetType: "SensitiveEntity",
+          targetId: sensitiveEntityId,
+          hideTargetIdOnNotFound: true,
+        },
+        async () => {
+          throw new NotFoundError("Sensitive entity not found", {
+            auditReason: "entity_not_found",
+          });
+        },
+      ),
+    ).rejects.toThrow(NotFoundError);
+
+    // CRITICAL: the audit event has targetId=null (entity existence hidden).
+    const audit = await db.auditEvent.findFirst({
+      where: {
+        actorId: memberId,
+        action: "sensitive.read",
+        outcome: "failure",
+      },
+    });
+    expect(audit).toBeTruthy();
+    expect(audit?.outcome).toBe("failure");
+    expect(audit?.reason).toBe("entity_not_found");
+    // CRITICAL: targetId is null — we did NOT confirm the entity exists.
+    expect(audit?.targetId).toBeNull();
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Test 8: regular ConflictError WITHOUT meta.auditReason is NOT audited
+  //
+  // Per ChatGPT point #3: "لا تحول كل ConflictError إلى حادثة أمنية."
+  // A regular ConflictError (e.g., duplicate submission) without explicit
+  // meta.auditReason should NOT generate an audit event.
+  // ─────────────────────────────────────────────────────────────────────
+  it("regular ConflictError WITHOUT meta.auditReason is NOT audited", async () => {
+    run = startTestRun();
+    const adminId = await createTestUser(run, "admin");
+    const { withDeniedFailureAudit } = await import("@/lib/audit-denied");
+
+    // Simulate a regular ConflictError (no meta.auditReason — operational,
+    // not security-relevant). E.g., duplicate submission.
+    await expect(
+      withDeniedFailureAudit(
+        {
+          actorId: adminId,
+          action: "submission.create",
+          targetType: "Submission",
+          targetId: `sub-${run.runId}`,
+        },
+        async () => {
+          throw new ConflictError("A submission with this key already exists");
+        },
+      ),
+    ).rejects.toThrow(ConflictError);
+
+    // CRITICAL: NO audit event was created (regular ConflictError, no opt-in).
+    const audit = await db.auditEvent.findFirst({
+      where: {
+        actorId: adminId,
+        action: "submission.create",
+      },
+    });
+    expect(audit).toBeNull();
+  });
 });
