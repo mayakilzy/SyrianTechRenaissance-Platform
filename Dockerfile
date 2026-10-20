@@ -35,6 +35,11 @@ FROM base AS prod
 ENV NODE_ENV=production
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# G10-01 FINAL HARDENING: copy the full .next/server directory.
+# The standalone output includes server.js but references files in
+# .next/server/ (e.g., preview-props.json, chunks). Without these,
+# the server crashes with ENOENT on startup.
+COPY --from=build /app/.next/server ./.next/server
 COPY --from=build /app/public ./public
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
