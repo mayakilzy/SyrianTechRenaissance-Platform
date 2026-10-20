@@ -461,21 +461,21 @@ describe("G09 Priority 2 — Audit Event Integrity", () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  // Test 9: Atomicity documentation — current contract
+  // Test 9: Atomicity contract verification (post-Gap 3)
   //
-  // This test DOCUMENTS the current audit atomicity contract by counting
-  // transactional vs. non-transactional audit writes in the codebase.
-  // It does NOT change the contract — that would require MASTER authorization.
-  //
-  // The test reads the source files and counts:
+  // This test verifies the CURRENT audit atomicity contract after Gap 3
+  // closure. It reads the source files and counts:
   //   - tx.auditEvent.create (inside transactions — atomic)
   //   - db.auditEvent.create (outside transactions — non-atomic)
   //
-  // Per MASTER directive: "حدد أولاً أي العمليات يتطلب التسجيل فيها
-  // ضماناً ذرياً" (first identify which operations require atomic logging).
-  // This test is the identification step.
+  // Per MASTER directive, Gap 3 wrapped 10 governance operations in
+  // atomic transactions. The contract is now:
+  //   - 12 transactional (2 original + 10 from Gap 3)
+  //   - 1 non-transactional (suspendPartnershipAgreement — low-risk, reversible)
+  //
+  // This test detects any UNINTENDED drift from the documented contract.
   // ───────────────────────────────────────────────────────────────────────
-  it("atomicity documentation: 2 transactional + 11 non-transactional audit writes (current contract)", async () => {
+  it("atomicity contract: 12 transactional + 1 non-transactional (post-Gap 3)", async () => {
     // Read the source files and count audit write patterns
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
@@ -522,24 +522,25 @@ describe("G09 Priority 2 — Audit Event Integrity", () => {
       }
     }
 
-    // DOCUMENTED CONTRACT (as of G09 Priority 2):
-    // - 2 transactional audit writes (partnerships + moderation decisions)
-    // - 11 non-transactional audit writes (integrations + organizations)
-    //
-    // The non-transactional writes mean: if the audit write fails, the
-    // operation has ALREADY committed — no audit trail. This is the
-    // CURRENT contract. Making these atomic is a design change requiring
-    // MASTER authorization.
+    // DOCUMENTED CONTRACT (post-Gap 3):
+    // - 12 transactional audit writes (atomic: state change + audit in one tx)
+    //   • 2 original: partnerships/service.ts:291 (decidePartnershipRequest),
+    //     moderation/service.ts:334 (decideComplaint)
+    //   • 10 from Gap 3: approveProvider, revokeConnection, suspendConnection,
+    //     verifyOrganization, suspendOrganization, reactivateOrganization,
+    //     revokeOrganization, verifyRepresentative, revokeRepresentative,
+    //     submitRightsDeclaration
+    // - 1 non-transactional (low-risk, reversible):
+    //   • partnerships/service.ts suspendPartnershipAgreement
+    //     (operational suspension of an INFECTED agreement, reversible,
+    //      no institutional trust change)
     //
     // This test asserts the CURRENT counts to detect any UNINTENDED change.
-    // If someone adds a new audit write, they must decide: atomic or not?
-    // and update this test accordingly.
-
-    expect(transactional).toBe(2);
-    expect(nonTransactional).toBe(11);
+    expect(transactional).toBe(12);
+    expect(nonTransactional).toBe(1);
 
     // Log the findings (visible in test output for documentation)
-    console.log("Audit atomicity analysis:");
+    console.log("Audit atomicity analysis (post-Gap 3):");
     console.log(`  Transactional (atomic): ${transactional}`);
     for (const op of transactionalOps) console.log(`    - ${op}`);
     console.log(`  Non-transactional (non-atomic): ${nonTransactional}`);
