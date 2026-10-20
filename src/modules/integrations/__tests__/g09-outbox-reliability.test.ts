@@ -685,20 +685,14 @@ describe("G09 Priority 2 — Outbox Reliability", () => {
       where: { providerId, providerEventId: eventId },
     });
     expect(events.length).toBe(1);
-    // The stored payload is one of the two (not a merge, not a third value).
+
+    // The stored payload is EXACTLY the winner's payload (no merge).
+    // The winner is the call whose INSERT committed first; the loser's
+    // INSERT failed with P2002 and was caught → ConflictError.
     const storedPayload = events[0]?.payload as Record<string, unknown>;
-    expect(storedPayload).toMatchObject(
-      expect.objectContaining({
-        first: expect.any(Boolean),
-        second: expect.any(Boolean),
-      }),
-    );
-    // Exactly one of {first, second} is true (the winner's flag).
-    const winnerFlags = [
-      storedPayload.first === true,
-      storedPayload.second === true,
-    ].filter(Boolean).length;
-    expect(winnerFlags).toBe(1);
+    const isWinnerFirst = storedPayload.first === true && storedPayload.second === undefined;
+    const isWinnerSecond = storedPayload.second === true && storedPayload.first === undefined;
+    expect(isWinnerFirst || isWinnerSecond).toBe(true);
   });
 
   // ───────────────────────────────────────────────────────────────────────
