@@ -1,0 +1,69 @@
+# ============================================================
+# STR Platform — Staging Docker Compose Override (G10-01)
+# ------------------------------------------------------------
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+#
+# This override:
+#   - Uses the PRODUCTION Docker image (target: prod, not dev)
+#   - Does NOT mount source code (uses built image, not live source)
+#   - Sets NODE_ENV=production
+#   - Configures restart: always (not unless-stopped)
+#   - Separates web and worker services (same image, different CMD)
+#
+# Prerequisites:
+#   - Build the production image first:
+#     docker build --target prod -t str-platform:staging .
+#   - Create .env.staging from .env.staging.example with real values
+#
+# Reverse proxy (Caddy or Nginx Proxy Manager):
+#   - MASTER decides which proxy to use based on hosting environment.
+#   - Caddy: configure Caddyfile with staging domain + auto-TLS.
+#   - NPM: configure via NPM web UI with staging domain.
+#   - The proxy forwards traffic to the web service on port 3000.
+# ============================================================
+
+services:
+  postgres:
+    restart: always
+
+  postgres-shadow:
+    restart: always
+
+  app:
+    image: str-platform:staging
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    container_name: str-staging-app
+    environment:
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      STR_WORKER: "false"
+    env_file:
+      - .env.staging
+    ports:
+      - "3000:3000"
+    # NO source mounts — uses the built production image.
+    restart: always
+    command: ["node", "server.js"]
+
+  worker:
+    image: str-platform:staging
+    container_name: str-staging-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      STR_WORKER: "true"
+    env_file:
+      - .env.staging
+    # NO source mounts — uses the built production image.
+    # Worker entry point: real outbox dispatcher (G10-01).
+    restart: always
+    command: ["bun", "run", "src/worker/index.ts"]

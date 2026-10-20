@@ -33,7 +33,19 @@ COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+
+# G10-01: Worker source + dependencies.
+# The worker is NOT part of the Next.js standalone build — it's a separate
+# process that imports from src/modules/ and src/lib/ directly.
+# Bun runs TypeScript natively and resolves path aliases via tsconfig.json.
+# The web app runs `node server.js` (standalone); the worker runs
+# `bun run src/worker/index.ts`. Same image, different CMD.
+COPY --from=build /app/src ./src
+COPY --from=build /app/tsconfig.json ./tsconfig.json
+COPY --from=build /app/package.json ./package.json
+RUN bun install --production --frozen-lockfile
+
 EXPOSE 3000
-# The same image runs either the web app or the worker, selected by the
-# STR_WORKER env var. See ADR-02.
+# Default: web app. Override CMD in docker-compose for the worker:
+#   command: bun run src/worker/index.ts
 CMD ["node", "server.js"]
