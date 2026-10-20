@@ -34,9 +34,23 @@ import {
 } from "@/lib/errors";
 
 let run: ReturnType<typeof startTestRun>;
+// Track unique providers created per-test-run for cleanup.
+// cleanupTestRun() doesn't delete providers (they're not in its scope).
+const uniqueProviderIds: string[] = [];
 
 afterEach(async () => {
-  if (run) await cleanupTestRun(run);
+  if (run) {
+    // Delete unique providers created by direct-coverage tests (so they
+    // don't leak across test runs). The shared "str.mock.v1" is NOT touched.
+    if (uniqueProviderIds.length > 0) {
+      for (const pid of uniqueProviderIds) {
+        await db.integrationCapability.deleteMany({ where: { providerId: pid } }).catch(() => {});
+        await db.integrationProvider.deleteMany({ where: { id: pid } }).catch(() => {});
+      }
+      uniqueProviderIds.length = 0;
+    }
+    await cleanupTestRun(run);
+  }
 });
 
 async function setupProjectWithAdmin() {
@@ -179,6 +193,78 @@ describe("G07 — Provider approval", () => {
     run = startTestRun();
     const { leadId } = await setupProjectWithAdmin();
     await expect(approveProvider("str.mock.v1", leadId)).rejects.toThrow(ForbiddenError);
+  });
+
+  // G09-P2 DIRECT COVERAGE: the tests above rely on setupMockProvider's
+  // inline $transaction for the positive path (which does NOT call
+  // approveProvider()). This test exercises approveProvider() DIRECTLY
+  // with a positive input to ensure the production function is covered:
+  //   - isAdmin check passes
+  //   - updateMany WHERE trustStatus='registered' matches (count=1)
+  //   - AuditEvent is created
+  //   - return value is correct
+  // The provider is created fresh in "registered" state and approveProvider
+  // is called directly (no fixture shortcut).
+  it("approveProvider() direct positive coverage — admin approves a fresh registered provider", async () => {
+    run = startTestRun();
+    const { adminId } = await setupProjectWithAdmin();
+
+    // Create a UNIQUE provider in "registered" state (not shared str.mock.v1
+    // to avoid any shared-state interference with other tests).
+    const uniqueProviderId = `str.mock.direct-${run.runId}`;
+    await db.integrationProvider.create({
+      data: {
+        id: uniqueProviderId,
+        slug: `str.mock.direct-${run.runId}`,
+        version: "v1",
+        displayName: "Direct Approval Test Provider",
+        description: "Provider for direct approveProvider() positive coverage",
+        owner: "STR Platform",
+        baseOrigin: "https://mock.str.local",
+        trustStatus: "registered",
+        authMode: { type: "none" },
+        isMock: true,
+      },
+    });
+    // Track for cleanup in afterEach.
+    uniqueProviderIds.push(uniqueProviderId);
+
+    // Call the PRODUCTION approveProvider directly.
+    const result = await approveProvider(uniqueProviderId, adminId);
+
+    // Verify the return value matches the production contract.
+    expect(result.id).toBe(uniqueProviderId);
+    expect(result.trustStatus).toBe("approved");
+
+    // Verify the DB state was updated by approveProvider (not by a fixture).
+    const provider = await db.integrationProvider.findUnique({ where: { id: uniqueProviderId } });
+    expect(provider?.trustStatus).toBe("approved");
+    expect(provider?.approvedById).toBe(adminId);
+    expect(provider?.approvedAt).toBeTruthy();
+
+    // Verify approveProvider created the AuditEvent.
+    const audit = await db.auditEvent.findFirst({
+      where: {
+        actorId: adminId,
+        action: "provider.approve",
+        targetType: "IntegrationProvider",
+        targetId: uniqueProviderId,
+      },
+    });
+    expect(audit).toBeTruthy();
+    expect(audit?.outcome).toBe("success");
+  });
+
+  // G09-P2 DIRECT COVERAGE: approveProvider() direct NEGATIVE coverage —
+  // calling on an already-approved provider throws ConflictError (the
+  // updateMany WHERE trustStatus='registered' returns count=0).
+  it("approveProvider() direct negative coverage — re-approving an approved provider throws ConflictError", async () => {
+    run = startTestRun();
+    const { adminId } = await setupProjectWithAdmin();
+    const providerId = await setupMockProvider(adminId); // leaves provider "approved"
+
+    // Calling approveProvider again on the same provider → ConflictError.
+    await expect(approveProvider(providerId, adminId)).rejects.toThrow(ConflictError);
   });
 });
 
