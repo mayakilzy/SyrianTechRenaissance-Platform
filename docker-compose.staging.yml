@@ -1,14 +1,19 @@
 # ============================================================
-# STR Platform — Staging Docker Compose Override (G10-01)
+# STR Platform — Staging Docker Compose (G10-01)
 # ------------------------------------------------------------
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# This is a STANDALONE staging compose file — NOT an override.
+# It does NOT inherit from docker-compose.yml to avoid merging
+# dev source mounts into the staging environment.
 #
-# This override:
-#   - Uses the PRODUCTION Docker image (target: prod, not dev)
-#   - Does NOT mount source code (uses built image, not live source)
+# Usage:
+#   docker build --target prod -t str-platform:staging .
+#   docker compose -f docker-compose.staging.yml up -d
+#
+# This compose:
+#   - Uses the PRODUCTION Docker image (target: prod)
+#   - Does NOT mount source code (uses built image only)
 #   - Sets NODE_ENV=production
-#   - Configures restart: always (not unless-stopped)
+#   - Configures restart: always
 #   - Separates web and worker services (same image, different CMD)
 #
 # Prerequisites:
@@ -25,18 +30,30 @@
 
 services:
   postgres:
-    restart: always
-
-  postgres-shadow:
+    image: postgres:17-alpine
+    container_name: str-staging-postgres
+    environment:
+      POSTGRES_USER: str
+      POSTGRES_PASSWORD: str_password
+      POSTGRES_DB: str_platform
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    ports:
+      - "5432:5432"
+    volumes:
+      - str-staging-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U str -d str_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: always
 
   app:
     image: str-platform:staging
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod
     container_name: str-staging-app
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       LOG_FORMAT: json
@@ -46,7 +63,7 @@ services:
       - .env.staging
     ports:
       - "3000:3000"
-    # NO source mounts — uses the built production image.
+    # NO source mounts — uses the built production image only.
     restart: always
     command: ["node", "server.js"]
 
@@ -63,7 +80,10 @@ services:
       STR_WORKER: "true"
     env_file:
       - .env.staging
-    # NO source mounts — uses the built production image.
+    # NO source mounts — uses the built production image only.
     # Worker entry point: real outbox dispatcher (G10-01).
     restart: always
     command: ["bun", "run", "src/worker/index.ts"]
+
+volumes:
+  str-staging-pgdata:
