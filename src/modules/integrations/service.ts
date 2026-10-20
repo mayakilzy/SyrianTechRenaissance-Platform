@@ -16,6 +16,7 @@
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { buildAuditData } from "@/lib/audit";
+import { withDeniedFailureAudit } from "@/lib/audit-denied";
 import {
   ValidationError,
   NotFoundError,
@@ -86,34 +87,43 @@ export async function listProviders(actorId: string) {
 }
 
 export async function approveProvider(providerId: string, approverId: string) {
-  if (!(await isAdmin(approverId))) {
-    throw new ForbiddenError("Only admins can approve providers");
-  }
-  // G09-P2 Gap 3: atomic — state change + audit in one transaction.
-  // If the audit write fails, the state change rolls back (no approval
-  // without audit trail). The optimistic-lock updateMany stays inside
-  // the transaction; if count=0 (already approved / concurrent), the
-  // transaction throws ConflictError and nothing commits.
-  await db.$transaction(async (tx) => {
-    const result = await tx.integrationProvider.updateMany({
-      where: { id: providerId, trustStatus: "registered" },
-      data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
-    });
-    if (result.count === 0) {
-      throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
-    }
-    await tx.auditEvent.create({
-      data: buildAuditData({
-        actorId: approverId,
-        action: "provider.approve",
-        targetType: "IntegrationProvider",
-        targetId: providerId,
-        outcome: "success",
-      }),
-    });
-  });
-  logger.info("integrations.provider.approved", { providerId, approverId });
-  return { id: providerId, trustStatus: "approved" as const };
+  // G09-P2 Gap 2: wrap with denied/failure audit. If the operation throws
+  // ForbiddenError (non-admin) or ConflictError (already approved / concurrent),
+  // a denied/failure audit event is written OUTSIDE the transaction.
+  return withDeniedFailureAudit(
+    {
+      actorId: approverId,
+      action: "provider.approve",
+      targetType: "IntegrationProvider",
+      targetId: providerId,
+    },
+    async () => {
+      if (!(await isAdmin(approverId))) {
+        throw new ForbiddenError("Only admins can approve providers");
+      }
+      // G09-P2 Gap 3: atomic — state change + audit in one transaction.
+      await db.$transaction(async (tx) => {
+        const result = await tx.integrationProvider.updateMany({
+          where: { id: providerId, trustStatus: "registered" },
+          data: { trustStatus: "approved", approvedById: approverId, approvedAt: new Date() },
+        });
+        if (result.count === 0) {
+          throw new ConflictError("Provider is not in 'registered' status (concurrent transition)");
+        }
+        await tx.auditEvent.create({
+          data: buildAuditData({
+            actorId: approverId,
+            action: "provider.approve",
+            targetType: "IntegrationProvider",
+            targetId: providerId,
+            outcome: "success",
+          }),
+        });
+      });
+      logger.info("integrations.provider.approved", { providerId, approverId });
+      return { id: providerId, trustStatus: "approved" as const };
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------

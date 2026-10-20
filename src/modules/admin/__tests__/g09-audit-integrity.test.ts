@@ -321,17 +321,16 @@ describe("G09 Priority 2 — Audit Event Integrity", () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  // Test 6: Audit event actorId is from the session (not spoofable via body)
+  // Test 6: non-admin attempt → denied audit (post-Gap 2)
   //
-  // The approveProvider function takes `approverId` as a parameter. A non-admin
-  // cannot call it — they get ForbiddenError, and NO audit event is created.
-  // This verifies the actor identity is enforced server-side.
+  // Previously (pre-Gap 2): NO audit event was created for failed attempts.
+  // Post-Gap 2: a DENIED audit event IS created (outcome="denied",
+  // reason="insufficient_permissions") so that probing attacks leave a trail.
   //
-  // Since we use a UNIQUE provider per test run, the provider starts in
-  // "registered" state (from setupProjectWithProvider's create + approve).
-  // We create a SECOND unique provider to test the non-admin approval path.
+  // This test verifies the NEW Gap 2 contract: non-admin attempt creates
+  // a denied audit (not a success audit, and not no-audit).
   // ───────────────────────────────────────────────────────────────────────
-  it("actor identity enforced server-side: non-admin cannot trigger audit event", async () => {
+  it("non-admin approveProvider attempt → denied audit (Gap 2 contract)", async () => {
     run = startTestRun();
     const { adminId } = await setupProjectWithProvider();
     const memberId = await createTestUser(run, "member");
@@ -358,14 +357,29 @@ describe("G09 Priority 2 — Audit Event Integrity", () => {
     // Member tries to approve → ForbiddenError
     await expect(approveProvider(provider2Id, memberId)).rejects.toThrow(ForbiddenError);
 
-    // CRITICAL: NO audit event was created for the failed attempt
-    const failedAudit = await db.auditEvent.findFirst({
+    // CRITICAL (Gap 2): a DENIED audit event IS created (probing leaves a trail)
+    const deniedAudit = await db.auditEvent.findFirst({
       where: {
         actorId: memberId,
         action: "provider.approve",
+        targetId: provider2Id,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(deniedAudit).toBeTruthy();
+    expect(deniedAudit?.outcome).toBe("denied");
+    expect(deniedAudit?.reason).toBe("insufficient_permissions");
+
+    // CRITICAL: no SUCCESS audit was created (the operation didn't succeed)
+    const successAudit = await db.auditEvent.findFirst({
+      where: {
+        actorId: memberId,
+        action: "provider.approve",
+        outcome: "success",
       },
     });
-    expect(failedAudit).toBeNull();
+    expect(successAudit).toBeNull();
 
     // The provider is still "registered" (not approved)
     const provider = await db.integrationProvider.findUnique({ where: { id: provider2Id } });
