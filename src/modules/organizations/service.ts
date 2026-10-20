@@ -19,6 +19,7 @@
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { buildAuditData } from "@/lib/audit";
 import {
   ValidationError,
   NotFoundError,
@@ -199,13 +200,13 @@ export async function verifyOrganization(orgId: string, actorId: string) {
   }
   // Audit event
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "organization.verify",
       targetType: "Organization",
       targetId: orgId,
       outcome: "success",
-    },
+    }),
   });
   logger.info("organizations.verified", { organizationId: orgId, actorId });
   return { id: orgId, status: "ACTIVE" as const };
@@ -231,14 +232,14 @@ export async function suspendOrganization(
     throw new ConflictError("Organization is not in ACTIVE status (concurrent transition)");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "organization.suspend",
       targetType: "Organization",
       targetId: orgId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("organizations.suspended", { organizationId: orgId, actorId });
   return { id: orgId, status: "SUSPENDED" as const };
@@ -257,13 +258,13 @@ export async function reactivateOrganization(orgId: string, actorId: string) {
     throw new ConflictError("Organization is not in SUSPENDED status (concurrent transition)");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "organization.reactivate",
       targetType: "Organization",
       targetId: orgId,
       outcome: "success",
-    },
+    }),
   });
   logger.info("organizations.reactivated", { organizationId: orgId, actorId });
   return { id: orgId, status: "ACTIVE" as const };
@@ -289,14 +290,14 @@ export async function revokeOrganization(
     throw new ConflictError("Organization is already REVOKED");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "organization.revoke",
       targetType: "Organization",
       targetId: orgId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("organizations.revoked", { organizationId: orgId, actorId });
   return { id: orgId, status: "REVOKED" as const };
@@ -392,13 +393,13 @@ export async function verifyRepresentative(repId: string, verifierId: string) {
     throw new ConflictError("Representative is no longer in a verifiable state (concurrent transition)");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId: verifierId,
       action: "representative.verify",
       targetType: "OrganizationRepresentative",
       targetId: repId,
       outcome: "success",
-    },
+    }),
   });
   logger.info("organizations.rep.verified", { representativeId: repId, verifierId });
   return { id: repId, verifiedAt: new Date().toISOString() };
@@ -429,14 +430,14 @@ export async function revokeRepresentative(
     throw new ConflictError("Representative is no longer revocable (concurrent transition)");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "representative.revoke",
       targetType: "OrganizationRepresentative",
       targetId: repId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("organizations.rep.revoked", { representativeId: repId, actorId });
   return { id: repId, revokedAt: new Date().toISOString() };

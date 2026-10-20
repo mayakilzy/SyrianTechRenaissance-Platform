@@ -35,6 +35,7 @@
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { buildAuditData } from "@/lib/audit";
 import {
   ValidationError,
   NotFoundError,
@@ -289,14 +290,14 @@ export async function decidePartnershipRequest(
     }
     // Audit event
     await tx.auditEvent.create({
-      data: {
+      data: buildAuditData({
         actorId: deciderId,
         action: `partnership.${valid.data.action.toLowerCase()}`,
         targetType: "PartnershipRequest",
         targetId: requestId,
         outcome: "success",
         reason: valid.data.reason,
-      },
+      }),
     });
     return { decision, newStatus };
   });
@@ -496,14 +497,14 @@ export async function suspendAgreementReliance(
     },
   });
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "partnership.agreement_suspend",
       targetType: "PartnershipRequest",
       targetId: requestId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("partnerships.agreement.suspended", { requestId, actorId });
   return { id: requestId, agreementSuspendedAt: result.agreementSuspendedAt };
@@ -570,14 +571,14 @@ export async function submitRightsDeclaration(
     },
   });
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId: declarerId,
       action: "rights.declare",
       targetType: "ContributionReference",
       targetId: contributionId,
       outcome: "success",
       reason: `Declared as ${valid.data.declarationType}`,
-    },
+    }),
   });
   logger.info("partnerships.rights.declared", {
     declarationId: declaration.id,

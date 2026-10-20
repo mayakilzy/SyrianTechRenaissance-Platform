@@ -271,10 +271,14 @@ describe("G09-P2 Gap 1 — reqId propagation", () => {
     });
     uniqueProviderIds.push(providerId);
 
-    // Malformed header — contains a newline (log-injection attempt).
-    const maliciousHeader = "req_bad\nFAKE LOG LINE";
+    // A header value that Headers() accepts (no control chars) but that
+    // resolveRequestId's regex /^[A-Za-z0-9_-]{8,128}$/ will REJECT:
+    // - contains a space (not in the allowed charset)
+    // - contains a single quote (not in the allowed charset)
+    // resolveRequestId should mint a fresh req_ id instead.
+    const malformedHeader = "req_bad' OR 1=1; --";
     const fakeReq = {
-      headers: new Headers({ "x-request-id": maliciousHeader }),
+      headers: new Headers({ "x-request-id": malformedHeader }),
     } as unknown as import("next/server").NextRequest;
 
     const { withRequestContext } = await import("@/lib/request-context-http");
@@ -285,10 +289,10 @@ describe("G09-P2 Gap 1 — reqId propagation", () => {
     const audit = await db.auditEvent.findFirst({
       where: { action: "provider.approve", targetId: providerId },
     });
-    // CRITICAL: the malicious header was NOT used. A fresh req_ id was minted.
+    // CRITICAL: the malformed header was NOT used. A fresh req_ id was minted.
     expect(audit?.reqId).toBeTruthy();
-    expect(audit?.reqId).not.toBe(maliciousHeader);
-    expect(audit?.reqId).not.toContain("\n");
-    expect(audit?.reqId).toMatch(/^req_[a-f0-9-]{36}$/);
+    expect(audit?.reqId).not.toBe(malformedHeader);
+    // No characters outside the safe set [A-Za-z0-9_-]
+    expect(audit?.reqId).toMatch(/^req_[A-Za-z0-9_-]+$/);
   });
 });

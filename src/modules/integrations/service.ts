@@ -219,14 +219,14 @@ export async function revokeConnection(connectionId: string, actorId: string, re
     data: { status: "cancelled", cancelReason: `Connection revoked: ${reason}`, finishedAt: new Date() },
   });
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "connection.revoke",
       targetType: "IntegrationConnection",
       targetId: connectionId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("integrations.connection.revoked", { connectionId, actorId });
   return { id: connectionId, status: "revoked" as const };
@@ -255,14 +255,14 @@ export async function suspendConnection(connectionId: string, actorId: string, r
     throw new ConflictError("Connection is no longer active (concurrent transition)");
   }
   await db.auditEvent.create({
-    data: {
+    data: buildAuditData({
       actorId,
       action: "connection.suspend",
       targetType: "IntegrationConnection",
       targetId: connectionId,
       outcome: "success",
       reason,
-    },
+    }),
   });
   logger.info("integrations.connection.suspended", { connectionId, actorId });
   return { id: connectionId, status: "suspended" as const };
