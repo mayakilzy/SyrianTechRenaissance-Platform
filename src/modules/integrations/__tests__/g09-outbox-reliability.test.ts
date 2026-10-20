@@ -49,7 +49,7 @@ import {
   recoverAbandonedOutboxEvents,
   checkTimeouts,
 } from "@/modules/integrations/outbox-worker";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, ForbiddenError } from "@/lib/errors";
 import { createHmac } from "node:crypto";
 
 let run: ReturnType<typeof startTestRun>;
@@ -92,10 +92,9 @@ async function setupProjectWithProvider() {
   run.projectIds.push(project.id);
 
   // Ensure mock provider exists + is approved
-  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval
-  // fields, then re-approve with the CURRENT test's adminId. Uses a SEPARATE
-  // update call (not the upsert's update clause) for the reset, to guarantee
-  // the reset is applied before approveProvider runs.
+  // G09-P2 ROOT-CAUSE FIX: do the reset + approve + auditEvent in a SINGLE
+  // $transaction so all three writes commit atomically. Previous pattern
+  // (3 separate calls) could see stale state in slow CI runners.
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
     update: { isMock: true },
@@ -112,13 +111,36 @@ async function setupProjectWithProvider() {
       isMock: true,
     },
   });
-  // Force reset to "registered" so approveProvider's updateMany matches.
-  await db.integrationProvider.update({
-    where: { id: provider.id },
-    data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+
+  // Verify admin (same security check as approveProvider).
+  const { isAdmin } = await import("@/modules/organizations/service");
+  if (!(await isAdmin(adminId))) {
+    throw new ForbiddenError("Only admins can approve providers");
+  }
+
+  // Atomic reset + approve + audit in one transaction.
+  await db.$transaction(async (tx) => {
+    await tx.integrationProvider.update({
+      where: { id: provider.id },
+      data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+    });
+    const approveResult = await tx.integrationProvider.updateMany({
+      where: { id: provider.id, trustStatus: "registered" },
+      data: { trustStatus: "approved", approvedById: adminId, approvedAt: new Date() },
+    });
+    if (approveResult.count === 0) {
+      throw new ConflictError("Provider reset+approve failed in transaction");
+    }
+    await tx.auditEvent.create({
+      data: {
+        actorId: adminId,
+        action: "provider.approve",
+        targetType: "IntegrationProvider",
+        targetId: provider.id,
+        outcome: "success",
+      },
+    });
   });
-  // Always re-approve with the current test's adminId.
-  await approveProvider(provider.id, adminId);
 
   // Register capabilities needed by Phase B tests
   const capabilities = [

@@ -16,8 +16,9 @@ import {
   createTestUser,
 } from "@/modules/organizations/__tests__/test-isolation";
 import { createProposal, submitProposal, reviewProposal } from "@/modules/proposals/service";
-import { createConnection, submitJob, approveProvider } from "@/modules/integrations/service";
+import { createConnection, submitJob } from "@/modules/integrations/service";
 import { processNextOutboxEvent, recoverAbandonedJobs, checkTimeouts } from "@/modules/integrations/outbox-worker";
+import { ForbiddenError, ConflictError } from "@/lib/errors";
 
 let run: ReturnType<typeof startTestRun>;
 
@@ -48,11 +49,16 @@ async function setupProjectWithProvider() {
   run.projectIds.push(project.id);
 
   // Ensure mock provider exists + is approved
-  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval
-  // fields, then re-approve with the CURRENT test's adminId. This ensures
-  // every test gets a freshly-approved provider regardless of prior state.
-  // Uses a SEPARATE update call (not the upsert's update clause) for the
-  // reset, to guarantee the reset is applied before approveProvider runs.
+  // G09-P2 ROOT-CAUSE FIX: previous pattern used 3 separate DB calls
+  // (upsert → update → approveProvider). In slow CI runners, the
+  // approveProvider's updateMany could see a stale "approved" state
+  // (from a prior test) because the reset update hadn't committed yet.
+  //
+  // FIX: do the reset + approve + auditEvent in a SINGLE $transaction
+  // so all three writes commit atomically. The approveProvider logic
+  // (updateMany WHERE trustStatus="registered" + count check + audit)
+  // is inlined here with `tx` so it shares the same transaction as the
+  // reset. The isAdmin check is preserved (same security contract).
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
     update: { isMock: true },
@@ -63,13 +69,36 @@ async function setupProjectWithProvider() {
       authMode: { type: "none" }, isMock: true,
     },
   });
-  // Force reset to "registered" so approveProvider's updateMany matches.
-  await db.integrationProvider.update({
-    where: { id: provider.id },
-    data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+
+  // Verify admin (same security check as approveProvider).
+  const { isAdmin } = await import("@/modules/organizations/service");
+  if (!(await isAdmin(adminId))) {
+    throw new ForbiddenError("Only admins can approve providers");
+  }
+
+  // Atomic reset + approve + audit in one transaction.
+  await db.$transaction(async (tx) => {
+    await tx.integrationProvider.update({
+      where: { id: provider.id },
+      data: { trustStatus: "registered", approvedById: null, approvedAt: null },
+    });
+    const approveResult = await tx.integrationProvider.updateMany({
+      where: { id: provider.id, trustStatus: "registered" },
+      data: { trustStatus: "approved", approvedById: adminId, approvedAt: new Date() },
+    });
+    if (approveResult.count === 0) {
+      throw new ConflictError("Provider reset+approve failed in transaction");
+    }
+    await tx.auditEvent.create({
+      data: {
+        actorId: adminId,
+        action: "provider.approve",
+        targetType: "IntegrationProvider",
+        targetId: provider.id,
+        outcome: "success",
+      },
+    });
   });
-  // Always re-approve with the current test's adminId.
-  await approveProvider(provider.id, adminId);
   await db.integrationCapability.upsert({
     where: { providerId_code: { providerId: provider.id, code: "application.test" } },
     update: {},
