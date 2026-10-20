@@ -48,9 +48,18 @@ async function setupProjectWithProvider() {
   run.projectIds.push(project.id);
 
   // Ensure mock provider exists + is approved
+  // G09-P2 fix: reset trustStatus to "registered" + clear approval fields on
+  // update so this test re-approves with ITS OWN adminId. Without this, a
+  // prior test may have approved the shared provider with a different admin
+  // whose user was then deleted by cleanup (approvedById=null).
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
-    update: { isMock: true },
+    update: {
+      isMock: true,
+      trustStatus: "registered",
+      approvedById: null,
+      approvedAt: null,
+    },
     create: {
       id: "str.mock.v1", slug: "str.mock", version: "v1",
       displayName: "STR Mock Provider", description: "Mock", owner: "STR",

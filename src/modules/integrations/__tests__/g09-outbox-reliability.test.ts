@@ -92,9 +92,19 @@ async function setupProjectWithProvider() {
   run.projectIds.push(project.id);
 
   // Ensure mock provider exists + is approved
+  // G09-P2 fix: reset trustStatus to "registered" + clear approval fields on
+  // update so this test re-approves with ITS OWN adminId. This prevents test
+  // pollution: if a prior test approved the provider with a different admin
+  // whose user was then deleted by cleanup, approvedById would be null and
+  // subsequent tests that check approvedById would fail.
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
-    update: { isMock: true },
+    update: {
+      isMock: true,
+      trustStatus: "registered",
+      approvedById: null,
+      approvedAt: null,
+    },
     create: {
       id: "str.mock.v1",
       slug: "str.mock",
@@ -666,12 +676,29 @@ describe("G09 Priority 2 — Outbox Reliability", () => {
     expect(rejected.length).toBe(1);
     expect(rejected[0]?.reason).toBeInstanceOf(ConflictError);
 
-    // Verify only ONE event row was created (the winner's payload, not both)
+    // Verify only ONE event row was created.
+    // Under TRUE concurrency, either call can win the unique-constraint race
+    // (PostgreSQL serializes the INSERTs but which one commits first is
+    // non-deterministic). We accept EITHER payload — the contract is
+    // "exactly one event stored", NOT "the first call's payload wins".
     const events = await db.integrationEvent.findMany({
       where: { providerId, providerEventId: eventId },
     });
     expect(events.length).toBe(1);
-    expect(events[0]?.payload).toMatchObject({ first: true });
+    // The stored payload is one of the two (not a merge, not a third value).
+    const storedPayload = events[0]?.payload as Record<string, unknown>;
+    expect(storedPayload).toMatchObject(
+      expect.objectContaining({
+        first: expect.any(Boolean),
+        second: expect.any(Boolean),
+      }),
+    );
+    // Exactly one of {first, second} is true (the winner's flag).
+    const winnerFlags = [
+      storedPayload.first === true,
+      storedPayload.second === true,
+    ].filter(Boolean).length;
+    expect(winnerFlags).toBe(1);
   });
 
   // ───────────────────────────────────────────────────────────────────────

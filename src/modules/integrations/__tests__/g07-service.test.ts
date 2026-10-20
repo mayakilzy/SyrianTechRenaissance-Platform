@@ -70,11 +70,20 @@ async function setupProjectWithAdmin() {
 }
 
 async function setupMockProvider(adminId: string) {
-  // Use upsert to handle the case where the provider already exists from seed
+  // Use upsert to handle the case where the provider already exists from seed.
+  // G09-P2 fix: ALWAYS reset trustStatus to "registered" + clear approval fields
+  // on update, so this test re-approves the provider with ITS OWN adminId.
+  // Without this, a prior test (e.g. g09-outbox-reliability or g07-webhook-worker)
+  // may have approved the shared provider and then had its admin user deleted
+  // by cleanup — leaving approvedById=null but trustStatus="approved". This
+  // test would then skip approval and fail the approvedById assertion.
   const provider = await db.integrationProvider.upsert({
     where: { id: "str.mock.v1" },
     update: {
       isMock: true,
+      trustStatus: "registered",
+      approvedById: null,
+      approvedAt: null,
     },
     create: {
       id: "str.mock.v1",
