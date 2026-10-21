@@ -242,83 +242,73 @@ jobs:
             exit 1
           fi
 
-      - name: C2 — Worker job processing (via API)
+      - name: C2 — Worker job processing (via DB)
         run: |
           set -euo pipefail
-          echo "Test: Submit a job via API and verify worker processes it"
-          # First, we need a session. Use the seed admin user.
-          # The seed creates admin@str.platform.local with no password (G01 seed).
-          # We can't sign in without a password. Instead, we'll insert a job directly
-          # via the DB using a migration/seed script inside the container.
+          echo "Test: Create a job via DB and verify worker processes it"
           
-          # Create a test connection + job directly in the DB
-          docker exec g10-02-app bun -e "
-          const { db } = require('./src/lib/db');
+          # Create test connection + job + outbox event via bun script inside the app container
+          docker exec g10-02-app bun -e '
+          const { db } = require("./src/lib/db");
           (async () => {
-            // Find the seeded admin user
-            const admin = await db.user.findFirst({ where: { email: 'admin@str.platform.local' }, include: { roleGrants: true } });
-            if (!admin) { console.log('ERROR: admin user not found'); process.exit(1); }
-            console.log('Admin user found:', admin.id);
-            
-            // Find the mock provider
-            const provider = await db.integrationProvider.findUnique({ where: { id: 'str.mock.v1' } });
-            if (!provider) { console.log('ERROR: provider not found'); process.exit(1); }
-            console.log('Provider found:', provider.id, 'status:', provider.trustStatus);
-            
-            // Approve if needed
-            if (provider.trustStatus !== 'approved') {
-              await db.integrationProvider.update({ where: { id: provider.id }, data: { trustStatus: 'approved', approvedAt: new Date() } });
-              console.log('Provider approved');
+            const admin = await db.user.findFirst({ where: { email: "admin@str.platform.local" } });
+            if (!admin) { console.log("ERROR: admin not found"); process.exit(1); }
+            const provider = await db.integrationProvider.findUnique({ where: { id: "str.mock.v1" } });
+            if (!provider) { console.log("ERROR: provider not found"); process.exit(1); }
+            if (provider.trustStatus !== "approved") {
+              await db.integrationProvider.update({ where: { id: provider.id }, data: { trustStatus: "approved", approvedAt: new Date() } });
             }
-            
-            // Find capability
             const cap = await db.integrationCapability.findFirst({ where: { providerId: provider.id } });
-            if (!cap) { console.log('ERROR: capability not found'); process.exit(1); }
-            console.log('Capability found:', cap.code);
-            
-            // Find or create a project
+            if (!cap) { console.log("ERROR: capability not found"); process.exit(1); }
             let project = await db.project.findFirst();
             if (!project) {
-              console.log('No project found. Creating minimal proposal+project...');
-              const proposal = await db.projectProposal.create({ data: { submitterId: admin.id, title: 'G10-02 Test', status: 'APPROVED', approvedAt: new Date(), submittedAt: new Date() } });
-              project = await db.project.create({ data: { proposalId: proposal.id, leadId: admin.id, stewardId: admin.id, title: 'G10-02 Test', status: 'ACTIVE' } });
+              const proposal = await db.projectProposal.create({ data: { submitterId: admin.id, title: "G10-02 Test", status: "APPROVED", approvedAt: new Date(), submittedAt: new Date() } });
+              project = await db.project.create({ data: { proposalId: proposal.id, leadId: admin.id, stewardId: admin.id, title: "G10-02 Test", status: "ACTIVE" } });
             }
-            console.log('Project found:', project.id);
-            
-            // Create a connection
-            const conn = await db.integrationConnection.create({ data: { providerId: provider.id, subjectKind: 'project', subjectId: project.id, status: 'active', scopes: ['test'], webhookSecret: 'encrypted:placeholder', webhookSecretHash: 'hash:placeholder', credentialReferenceId: 'mock-cred-g10-02' } });
-            console.log('Connection created:', conn.id);
-            
-            // Create a job
-            const job = await db.integrationJob.create({ data: { connectionId: conn.id, capability: cap.code, subjectKind: 'project', subjectId: project.id, status: 'queued', idempotencyKey: 'g10-02-integration-test', payload: { input: 'integration-test' }, timeoutMs: 30000 } });
-            console.log('Job created:', job.id, 'status: queued');
-            
-            // Create outbox event
-            await db.outboxEvent.create({ data: { aggregate: 'integration.job', aggregateId: job.id, type: 'integration.job.submitted', payload: { jobId: job.id, capability: cap.code } } });
-            console.log('Outbox event created');
-            
-            console.log('JOB_ID=' + job.id);
-            await db.\$disconnect();
+            const conn = await db.integrationConnection.create({ data: { providerId: provider.id, subjectKind: "project", subjectId: project.id, status: "active", scopes: ["test"], webhookSecret: "encrypted:placeholder", webhookSecretHash: "hash:placeholder", credentialReferenceId: "mock-cred-g10-02" } });
+            const job = await db.integrationJob.create({ data: { connectionId: conn.id, capability: cap.code, subjectKind: "project", subjectId: project.id, status: "queued", idempotencyKey: "g10-02-integration-test", payload: { input: "integration-test" }, timeoutMs: 30000 } });
+            await db.outboxEvent.create({ data: { aggregate: "integration.job", aggregateId: job.id, type: "integration.job.submitted", payload: { jobId: job.id, capability: cap.code } } });
+            console.log("JOB_CREATED=" + job.id);
+            await db.$disconnect();
           })().catch(e => { console.error(e); process.exit(1); });
-          " 2>&1
-          
-          # Wait for worker to process the job
+          '
+
+          # Wait for worker to process the job (poll via bun script, not psql)
           echo "Waiting for worker to process job..."
           for i in $(seq 1 30); do
-            STATUS=$(docker exec g10-02-postgres psql -U str -d str_platform -t -c "SELECT status FROM \"IntegrationJob\" WHERE idempotencyKey = 'g10-02-integration-test' LIMIT 1" 2>/dev/null | tr -d ' \n')
+            STATUS=$(docker exec g10-02-app bun -e '
+            const { db } = require("./src/lib/db");
+            (async () => {
+              const job = await db.integrationJob.findFirst({ where: { idempotencyKey: "g10-02-integration-test" }, select: { status: true } });
+              console.log(job ? job.status : "NOT_FOUND");
+              await db.$disconnect();
+            })().catch(() => process.exit(0));
+            ' 2>/dev/null | tr -d ' \n' || echo "ERROR")
+
             echo "  Attempt $i: job status = '$STATUS'"
             if [ "$STATUS" = "succeeded" ]; then
               echo "PASS: Job reached 'succeeded' status"
+
               # Verify outbox event is dispatched
-              DISPATCHED=$(docker exec g10-02-postgres psql -U str -d str_platform -t -c "SELECT \"dispatchedAt\" IS NOT NULL FROM \"OutboxEvent\" WHERE \"aggregateId\" = (SELECT id FROM \"IntegrationJob\" WHERE idempotencyKey = 'g10-02-integration-test') LIMIT 1" 2>/dev/null | tr -d ' \n')
+              DISPATCHED=$(docker exec g10-02-app bun -e '
+              const { db } = require("./src/lib/db");
+              (async () => {
+                const job = await db.integrationJob.findFirst({ where: { idempotencyKey: "g10-02-integration-test" }, select: { id: true } });
+                if (!job) { console.log("false"); return; }
+                const evt = await db.outboxEvent.findFirst({ where: { aggregateId: job.id }, select: { dispatchedAt: true } });
+                console.log(evt && evt.dispatchedAt ? "true" : "false");
+                await db.$disconnect();
+              })().catch(() => process.exit(0));
+              ' 2>/dev/null | tr -d ' \n' || echo "ERROR")
+
               echo "  Outbox dispatched: $DISPATCHED"
-              if [ "$DISPATCHED" = "t" ]; then
+              if [ "$DISPATCHED" = "true" ]; then
                 echo "PASS: Outbox event dispatched after processing"
+                exit 0
               else
                 echo "FAIL: Outbox event NOT dispatched"
                 exit 1
               fi
-              exit 0
             elif [ "$STATUS" = "failed" ]; then
               echo "FAIL: Job failed"
               docker logs g10-02-worker 2>&1 | tail -20
