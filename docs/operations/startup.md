@@ -213,3 +213,71 @@ The production image:
   function is test-only. Production needs a ClamAV or equivalent integration.
 - **Backup/Restore**: not yet documented. G10 Track 1 will create a
   dedicated runbook for PostgreSQL backup and restore.
+
+---
+
+## 11. G10-02 — Runtime Integration Verification (CI)
+
+The `.github/workflows/g10-02-integration.yml` workflow performs a full
+runtime integration test using Docker Compose with real PostgreSQL 17.
+
+### What it tests:
+1. **PostgreSQL starts and is healthy**
+2. **Prisma migrations complete** (via `bunx prisma migrate deploy`)
+3. **Seed data loads** (via `bun run db:seed`)
+4. **Web server starts and responds** (`/api/v1/health` → HTTP 200)
+5. **Readiness with healthy DB** (`/api/v1/ready` → HTTP 200)
+6. **Readiness during DB outage** (stop PostgreSQL → `/api/v1/ready` → HTTP 503)
+7. **Readiness after DB recovery** (restart PostgreSQL → `/api/v1/ready` → HTTP 200)
+8. **Liveness survives DB outage** (`/api/v1/health` → HTTP 200 even when DB is down)
+9. **Worker startup** (container running, enters polling loop)
+10. **Worker job processing** (real queued job → succeeded + outbox dispatched)
+11. **Worker graceful shutdown** (SIGTERM → clean exit)
+12. **Worker restart** (restarts and enters polling loop again)
+
+### Integration commands (for local reproduction):
+```bash
+# Build production image
+docker build --target prod -t str-platform:g10-02 .
+
+# Use the persisted compose file in the repo
+docker compose -f docker-compose.integration.yml up -d postgres
+docker compose -f docker-compose.integration.yml up migrate
+docker compose -f docker-compose.integration.yml up seed
+docker compose -f docker-compose.integration.yml up -d app worker
+
+# Test health
+curl http://localhost:3001/api/v1/health  # → 200
+curl http://localhost:3001/api/v1/ready    # → 200 (with DB) or 503 (without)
+
+# Test DB outage
+docker stop g10-02-postgres
+curl http://localhost:3001/api/v1/health   # → 200 (liveness survives)
+curl http://localhost:3001/api/v1/ready    # → 503 (readiness fails)
+docker start g10-02-postgres
+# Wait for recovery...
+
+# Test worker shutdown
+docker stop g10-02-worker  # SIGTERM → clean exit
+
+# Cleanup
+docker compose -f docker-compose.integration.yml down -v
+```
+
+### Environment Variables (no secrets):
+| Variable | Value |
+|----------|-------|
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | `postgresql://str:integration-test-password@postgres:5432/str_platform` |
+| `AUTH_SECRET` | `integration-test-secret-at-least-16-chars` |
+| `HOSTNAME` | `0.0.0.0` |
+| `PORT` | `3000` |
+| `LOG_LEVEL` | `info` |
+| `LOG_FORMAT` | `json` |
+
+### Known Limitations:
+- Integration test uses disposable PostgreSQL (volume deleted on cleanup)
+- No real Google OAuth (dummy credentials)
+- No real S3 storage (placeholder readUrl)
+- No real SMTP email (LogEmailService)
+- These are staging acceptance requirements, not integration test requirements

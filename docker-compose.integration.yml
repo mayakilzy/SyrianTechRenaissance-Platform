@@ -1,0 +1,106 @@
+# ============================================================
+# STR Platform — G10-02 Integration Test Compose (Reproducible)
+# ------------------------------------------------------------
+# This file is used by .github/workflows/g10-02-integration.yml
+# and can be used locally to reproduce the integration tests.
+#
+# Usage:
+#   docker build --target prod -t str-platform:g10-02 .
+#   docker compose -f docker-compose.integration.yml up -d postgres
+#   docker compose -f docker-compose.integration.yml up migrate
+#   docker compose -f docker-compose.integration.yml up seed
+#   docker compose -f docker-compose.integration.yml up -d app worker
+#
+# Test:
+#   curl http://localhost:3001/api/v1/health   # → 200
+#   curl http://localhost:3001/api/v1/ready     # → 200 (DB healthy) or 503
+#
+# Cleanup:
+#   docker compose -f docker-compose.integration.yml down -v
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: g10-02-postgres
+    environment:
+      POSTGRES_USER: str
+      POSTGRES_PASSWORD: integration-test-password
+      POSTGRES_DB: str_platform
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    expose:
+      - "5432"
+    volumes:
+      - g10-02-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U str -d str_platform"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  migrate:
+    image: str-platform:g10-02
+    container_name: g10-02-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
+      AUTH_SECRET: "integration-test-secret-at-least-16-chars"
+      HOSTNAME: "0.0.0.0"
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  seed:
+    image: str-platform:g10-02
+    container_name: g10-02-seed
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
+      AUTH_SECRET: "integration-test-secret-at-least-16-chars"
+      HOSTNAME: "0.0.0.0"
+    command: ["bun", "run", "db:seed"]
+    restart: "no"
+
+  app:
+    image: str-platform:g10-02
+    container_name: g10-02-app
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
+      AUTH_SECRET: "integration-test-secret-at-least-16-chars"
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    command: ["node", "server.js"]
+
+  worker:
+    image: str-platform:g10-02
+    container_name: g10-02-worker
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
+      AUTH_SECRET: "integration-test-secret-at-least-16-chars"
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+      STR_WORKER: "true"
+    restart: unless-stopped
+    command: ["bun", "run", "src/worker/index.ts"]
+
+volumes:
+  g10-02-pgdata:

@@ -1,0 +1,308 @@
+name: STR Platform — G10-02 Runtime Integration
+
+# G10-02: Full runtime integration test using Docker Compose.
+# Starts PostgreSQL + web + worker, runs real HTTP tests, verifies
+# readiness transitions, job processing, and graceful shutdown.
+# All checks are mandatory — no continue-on-error, no || echo masking.
+
+on:
+  push:
+    branches: ["feat/g10-02-runtime-integration"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g10-02-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-test:
+    name: Runtime Integration (PostgreSQL + Web + Worker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: prod
+          tags: str-platform:g10-02
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start integration stack
+        run: |
+          set -euo pipefail
+          echo "Starting PostgreSQL + migrations + seed + web + worker..."
+          docker compose -f docker-compose.integration.yml up -d postgres
+          echo "Waiting for PostgreSQL health..."
+          sleep 10
+          docker compose -f docker-compose.integration.yml up migrate
+          echo "Migrations completed."
+          docker compose -f docker-compose.integration.yml up seed
+          echo "Seed completed."
+          docker compose -f docker-compose.integration.yml up -d app worker
+          echo "Web and worker starting..."
+          sleep 5
+
+      - name: B1 — Web health (liveness)
+        run: |
+          set -euo pipefail
+          echo "Test: /api/v1/health returns 200 (liveness)"
+          for i in $(seq 1 15); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "PASS: Liveness returned 200 on attempt $i"
+              curl -s http://localhost:3001/api/v1/health | python3 -m json.tool
+              exit 0
+            fi
+            echo "  Attempt $i: HTTP $HTTP_CODE..."
+            sleep 1
+          done
+          echo "FAIL: Liveness did not return 200"
+          docker logs g10-02-app 2>&1 || true
+          exit 1
+
+      - name: B2 — Web readiness (healthy DB)
+        run: |
+          set -euo pipefail
+          echo "Test: /api/v1/ready returns 200 (readiness with healthy DB)"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/ready 2>/dev/null)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "PASS: Readiness returned 200"
+            curl -s http://localhost:3001/api/v1/ready | python3 -m json.tool
+            exit 0
+          fi
+          echo "FAIL: Readiness returned $HTTP_CODE (expected 200)"
+          docker logs g10-02-app 2>&1 || true
+          exit 1
+
+      - name: B3 — Readiness 503 during DB outage
+        run: |
+          set -euo pipefail
+          echo "Test: Stop PostgreSQL, readiness returns 503"
+          docker stop g10-02-postgres
+          sleep 3
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/ready 2>/dev/null)
+          if [ "$HTTP_CODE" = "503" ]; then
+            echo "PASS: Readiness returned 503 during DB outage"
+            curl -s http://localhost:3001/api/v1/ready 2>/dev/null | python3 -m json.tool || true
+          else
+            echo "FAIL: Readiness returned $HTTP_CODE (expected 503)"
+            exit 1
+          fi
+
+      - name: B4 — Readiness recovers after DB restart
+        run: |
+          set -euo pipefail
+          echo "Test: Restart PostgreSQL, readiness returns 200"
+          docker start g10-02-postgres
+          echo "Waiting for PostgreSQL to recover..."
+          sleep 10
+          for i in $(seq 1 15); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/ready 2>/dev/null)
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "PASS: Readiness returned 200 on attempt $i after DB recovery"
+              curl -s http://localhost:3001/api/v1/ready | python3 -m json.tool
+              exit 0
+            fi
+            echo "  Attempt $i: HTTP $HTTP_CODE..."
+            sleep 2
+          done
+          echo "FAIL: Readiness did not recover"
+          exit 1
+
+      - name: B5 — Liveness survives DB outage
+        run: |
+          set -euo pipefail
+          echo "Test: /api/v1/health returns 200 even during DB outage"
+          docker stop g10-02-postgres
+          sleep 2
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>/dev/null)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "PASS: Liveness returned 200 during DB outage"
+          else
+            echo "FAIL: Liveness returned $HTTP_CODE during DB outage (expected 200)"
+            exit 1
+          fi
+          # Restart DB for subsequent tests
+          docker start g10-02-postgres
+          sleep 10
+
+      - name: C1 — Worker startup verification
+        run: |
+          set -uo pipefail
+          echo "Test: Worker container is running"
+          # Use || true to prevent grep from failing the step (exit 141 = SIGPIPE from head)
+          if docker ps --filter name=g10-02-worker --filter status=running 2>/dev/null | grep -q g10-02-worker; then
+            echo "PASS: Worker container is running"
+            docker logs g10-02-worker 2>&1 | head -20 || true
+            exit 0
+          else
+            echo "FAIL: Worker container is not running"
+            docker logs g10-02-worker 2>&1 || true
+            exit 1
+          fi
+
+      - name: C2 — Worker job processing (via DB)
+        run: |
+          set -euo pipefail
+          echo "Test: Create a job via DB and verify worker processes it"
+          
+          # Create test connection + job + outbox event via bun script inside the app container
+          docker exec g10-02-app bun -e '
+          const { db } = require("./src/lib/db");
+          (async () => {
+            const admin = await db.user.findFirst({ where: { email: "admin@str.platform.local" } });
+            if (!admin) { console.log("ERROR: admin not found"); process.exit(1); }
+            const provider = await db.integrationProvider.findUnique({ where: { id: "str.mock.v1" } });
+            if (!provider) { console.log("ERROR: provider not found"); process.exit(1); }
+            if (provider.trustStatus !== "approved") {
+              await db.integrationProvider.update({ where: { id: provider.id }, data: { trustStatus: "approved", approvedAt: new Date() } });
+            }
+            const cap = await db.integrationCapability.findFirst({ where: { providerId: provider.id } });
+            if (!cap) { console.log("ERROR: capability not found"); process.exit(1); }
+            let project = await db.project.findFirst();
+            if (!project) {
+              const proposal = await db.projectProposal.create({ data: { submitterId: admin.id, title: "G10-02 Test", status: "APPROVED", approvedAt: new Date(), submittedAt: new Date() } });
+              project = await db.project.create({ data: { proposalId: proposal.id, leadId: admin.id, stewardId: admin.id, title: "G10-02 Test", status: "ACTIVE" } });
+            }
+            const conn = await db.integrationConnection.create({ data: { providerId: provider.id, subjectKind: "project", subjectId: project.id, status: "active", scopes: ["test"], webhookSecret: "encrypted:placeholder", webhookSecretHash: "hash:placeholder", credentialReferenceId: "mock-cred-g10-02" } });
+            const job = await db.integrationJob.create({ data: { connectionId: conn.id, capability: cap.code, subjectKind: "project", subjectId: project.id, status: "queued", idempotencyKey: "g10-02-integration-test", payload: { input: "integration-test" }, timeoutMs: 30000 } });
+            await db.outboxEvent.create({ data: { aggregate: "integration.job", aggregateId: job.id, type: "integration.job.submitted", payload: { jobId: job.id, capability: cap.code } } });
+            console.log("JOB_CREATED=" + job.id);
+            await db.$disconnect();
+          })().catch(e => { console.error(e); process.exit(1); });
+          '
+
+          # Wait for worker to process the job (poll via bun script, not psql)
+          echo "Waiting for worker to process job..."
+          for i in $(seq 1 30); do
+            STATUS=$(docker exec g10-02-app bun -e '
+            const { db } = require("./src/lib/db");
+            (async () => {
+              const job = await db.integrationJob.findFirst({ where: { idempotencyKey: "g10-02-integration-test" }, select: { status: true } });
+              console.log(job ? job.status : "NOT_FOUND");
+              await db.$disconnect();
+            })().catch(() => process.exit(0));
+            ' 2>/dev/null | tr -d ' \n' || echo "ERROR")
+
+            echo "  Attempt $i: job status = '$STATUS'"
+            if [ "$STATUS" = "succeeded" ]; then
+              echo "PASS: Job reached 'succeeded' status"
+
+              # Verify outbox event is dispatched
+              DISPATCHED=$(docker exec g10-02-app bun -e '
+              const { db } = require("./src/lib/db");
+              (async () => {
+                const job = await db.integrationJob.findFirst({ where: { idempotencyKey: "g10-02-integration-test" }, select: { id: true } });
+                if (!job) { console.log("false"); return; }
+                const evt = await db.outboxEvent.findFirst({ where: { aggregateId: job.id }, select: { dispatchedAt: true } });
+                console.log(evt && evt.dispatchedAt ? "true" : "false");
+                await db.$disconnect();
+              })().catch(() => process.exit(0));
+              ' 2>/dev/null | tr -d ' \n' || echo "ERROR")
+
+              echo "  Outbox dispatched: $DISPATCHED"
+              if [ "$DISPATCHED" = "true" ]; then
+                echo "PASS: Outbox event dispatched after processing"
+                exit 0
+              else
+                echo "FAIL: Outbox event NOT dispatched"
+                exit 1
+              fi
+            elif [ "$STATUS" = "failed" ]; then
+              echo "FAIL: Job failed"
+              docker logs g10-02-worker 2>&1 | tail -20
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "FAIL: Job did not reach 'succeeded' within 60s"
+          docker logs g10-02-worker 2>&1 | tail -20
+          exit 1
+
+      - name: C3 — Worker graceful shutdown (SIGTERM + exit code 0)
+        run: |
+          set -uo pipefail
+          echo "Test: Send SIGTERM to worker, verify clean exit (code 0 + shutdown logs)"
+          
+          # Send SIGTERM with a 15s grace period (default docker stop is 10s).
+          # The worker's AbortSignal handler should exit cleanly well within 15s.
+          docker stop -t 15 g10-02-worker 2>/dev/null || true
+          sleep 2
+          
+          # Get the container's exit code
+          EXIT_CODE=$(docker inspect g10-02-worker --format='{{.State.ExitCode}}' 2>/dev/null || echo "UNKNOWN")
+          echo "Container exit code: $EXIT_CODE"
+          
+          # Check worker logs for graceful shutdown messages
+          WORKER_LOGS=$(docker logs g10-02-worker 2>&1 || true)
+          
+          if echo "$WORKER_LOGS" | grep -q "worker.entry.shutdown.success"; then
+            echo "PASS: Worker logged 'worker.entry.shutdown.success'"
+          else
+            echo "FAIL: Worker did NOT log 'worker.entry.shutdown.success'"
+            echo "=== Worker logs (last 15 lines) ==="
+            echo "$WORKER_LOGS" | tail -15
+            exit 1
+          fi
+          
+          if echo "$WORKER_LOGS" | grep -q "outbox.worker.shutdown.complete"; then
+            echo "PASS: Worker logged 'outbox.worker.shutdown.complete'"
+          else
+            echo "FAIL: Worker did NOT log 'outbox.worker.shutdown.complete'"
+            exit 1
+          fi
+          
+          if echo "$WORKER_LOGS" | grep -q "worker.entry.shutdown.signal"; then
+            echo "PASS: Worker received SIGTERM signal"
+          else
+            echo "FAIL: Worker did NOT log SIGTERM receipt"
+            exit 1
+          fi
+          
+          # Verify exit code is 0 (clean exit, not forced termination)
+          if [ "$EXIT_CODE" = "0" ]; then
+            echo "PASS: Worker exited with code 0 (clean exit)"
+          else
+            echo "FAIL: Worker exited with code $EXIT_CODE (expected 0 for graceful shutdown)"
+            echo "Non-zero exit code indicates forced termination or crash."
+            exit 1
+          fi
+          
+          echo "=== Shutdown logs ==="
+          echo "$WORKER_LOGS" | grep -E "shutdown|SIGTERM" | tail -5
+
+      - name: C4 — Worker restart after shutdown
+        run: |
+          set -uo pipefail
+          echo "Test: Restart worker after shutdown"
+          docker compose -f docker-compose.integration.yml up -d worker
+          sleep 5
+          if docker ps --filter name=g10-02-worker --filter status=running 2>/dev/null | grep -q g10-02-worker; then
+            echo "PASS: Worker restarted successfully"
+            docker logs g10-02-worker 2>&1 | tail -5 || true
+          else
+            echo "FAIL: Worker did not restart"
+            docker logs g10-02-worker 2>&1 || true
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose -f docker-compose.integration.yml down -v 2>/dev/null || true
+          docker stop g10-02-postgres g10-02-app g10-02-worker g10-02-migrate g10-02-seed 2>/dev/null || true
+          docker rm g10-02-postgres g10-02-app g10-02-worker g10-02-migrate g10-02-seed 2>/dev/null || true
+          docker volume rm g10-02-pgdata 2>/dev/null || true
