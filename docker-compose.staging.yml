@@ -1,19 +1,43 @@
 # ============================================================
-# STR Platform — Staging Docker Compose (G10-01)
+# STR Platform — Staging Docker Compose (G10-01 + G10-03 hardening)
 # ------------------------------------------------------------
 # This is a STANDALONE staging compose file — NOT an override.
 # It does NOT inherit from docker-compose.yml to avoid merging
 # dev source mounts into the staging environment.
 #
-# Usage:
+# G10-03 hardening additions:
+#   - `migrate` one-shot service runs `prisma migrate deploy` before
+#     app/worker start. App and worker depend on migrate completing
+#     successfully (service_completed_successfully).
+#   - `healthcheck` block on app so `docker compose ps` and
+#     orchestrators can detect a wedged container without manual
+#     curl probes.
+#   - G10-03-VALIDATION: app port bound to 127.0.0.1 (not 0.0.0.0).
+#   - G10-03-VALIDATION: healthcheck uses `node` (not `curl`) —
+#     `oven/bun:1.3` does not include `curl`.
+#
+# Usage (CRITICAL — `--env-file` is required):
 #   docker build --target prod -t str-platform:staging .
-#   docker compose -f docker-compose.staging.yml up -d
+#   docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
+#
+# Why `--env-file .env.staging` is REQUIRED:
+#   The compose file uses `${POSTGRES_PASSWORD:?...}` interpolation
+#   for the postgres service. This variable must be available AT
+#   COMPOSE-UP TIME (not just container runtime). The `env_file:`
+#   directive in each service only injects env vars INTO the running
+#   container — it does NOT make them available to compose's
+#   interpolation step. Pass `--env-file .env.staging` explicitly
+#   so compose reads the file for interpolation.
+#   Without this flag, compose will fail with:
+#     "error while interpolating services.postgres.environment.POSTGRES_PASSWORD:
+#      required variable POSTGRES_PASSWORD is missing a value"
 #
 # This compose:
 #   - Uses the PRODUCTION Docker image (target: prod)
 #   - Does NOT mount source code (uses built image only)
 #   - Sets NODE_ENV=production
 #   - Configures restart: always
+#   - Runs migrations BEFORE app/worker start
 #   - Separates web and worker services (same image, different CMD)
 #
 # Prerequisites:
@@ -56,9 +80,14 @@ services:
       retries: 10
     restart: always
 
-  app:
+  # G10-03: one-shot migration service.
+  # Runs `prisma migrate deploy` (idempotent — only applies pending migrations).
+  # App and worker depend on this completing successfully.
+  # On re-runs of `docker compose up`, this service reports "exited (0)" and
+  # compose skips it because migrate is already complete.
+  migrate:
     image: str-platform:staging
-    container_name: str-staging-app
+    container_name: str-staging-migrate
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,12 +95,65 @@ services:
       NODE_ENV: production
       LOG_FORMAT: json
       LOG_LEVEL: info
-      STR_WORKER: "false"
     env_file:
       - .env.staging
+    # prisma migrate deploy is safe for re-runs — it only applies pending
+    # migrations and exits 0 if the schema is already up to date.
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  app:
+    image: str-platform:staging
+    container_name: str-staging-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      STR_WORKER: "false"
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+    env_file:
+      - .env.staging
+    # G10-03-VALIDATION B-fix: bind to 127.0.0.1 only.
+    # The staging app must NOT be reachable directly from the public
+    # internet. Traffic must go through the reverse proxy (Caddy / NPM).
+    #
+    # Two deployment topologies are documented in staging-deployment.md §7:
+    #   1. Proxy runs ON THE HOST (e.g., Caddy installed as a system
+    #      service). The proxy connects to 127.0.0.1:3000 — this default
+    #      binding supports that topology.
+    #   2. Proxy runs INSIDE A DOPER CONTAINER. Both proxy and app must
+    #      share a Docker network, and the app's ports mapping can be
+    #      removed entirely (only `expose: ["3000"]` is needed).
+    #      See staging-deployment.md §7.2 for the override snippet.
+    #
+    # Default (this file): topology #1. Override for topology #2
+    # is documented in the runbook and is a one-line change.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     # NO source mounts — uses the built production image only.
+    #
+    # G10-03-VALIDATION A-fix: healthcheck uses `node`, not `curl`.
+    # The `oven/bun:1.3` base image (Debian slim) does NOT include
+    # `curl`. `node` is guaranteed present because the prod runtime is
+    # `node server.js` (verified by docker-build CI). `fetch` is
+    # available in Node 18+ (Next.js 16 requires Node 20+).
+    #
+    # The check returns exit 0 on HTTP 200, exit 1 otherwise.
+    # We use the LIVENESS endpoint (always 200 when process is alive)
+    # rather than readiness (which would mark the container unhealthy
+    # during a transient DB outage and cause restart cycles).
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: always
     command: ["node", "server.js"]
 
@@ -81,6 +163,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       LOG_FORMAT: json
@@ -90,6 +174,10 @@ services:
       - .env.staging
     # NO source mounts — uses the built production image only.
     # Worker entry point: real outbox dispatcher (G10-01).
+    # G10-03: no HTTP healthcheck (worker has no HTTP server).
+    # Health is monitored via logs: look for `outbox.worker.start` on startup
+    # and `outbox.worker.shutdown.complete` on graceful exit. If neither
+    # appears within ~30s, the container is stuck and should be restarted.
     restart: always
     command: ["bun", "run", "src/worker/index.ts"]
 
