@@ -1,0 +1,97 @@
+# ============================================================
+# STR Platform — Staging Docker Compose (G10-01)
+# ------------------------------------------------------------
+# This is a STANDALONE staging compose file — NOT an override.
+# It does NOT inherit from docker-compose.yml to avoid merging
+# dev source mounts into the staging environment.
+#
+# Usage:
+#   docker build --target prod -t str-platform:staging .
+#   docker compose -f docker-compose.staging.yml up -d
+#
+# This compose:
+#   - Uses the PRODUCTION Docker image (target: prod)
+#   - Does NOT mount source code (uses built image only)
+#   - Sets NODE_ENV=production
+#   - Configures restart: always
+#   - Separates web and worker services (same image, different CMD)
+#
+# Prerequisites:
+#   - Build the production image first:
+#     docker build --target prod -t str-platform:staging .
+#   - Create .env.staging from .env.staging.example with real values
+#
+# Reverse proxy (Caddy or Nginx Proxy Manager):
+#   - MASTER decides which proxy to use based on hosting environment.
+#   - Caddy: configure Caddyfile with staging domain + auto-TLS.
+#   - NPM: configure via NPM web UI with staging domain.
+#   - The proxy forwards traffic to the web service on port 3000.
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: str-staging-postgres
+    # G10-01V-FIX: password comes from .env.staging (POSTGRES_PASSWORD).
+    # No hardcoded password. If not set, PostgreSQL will refuse to start.
+    environment:
+      POSTGRES_USER: str
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.staging}
+      POSTGRES_DB: str_platform
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    # G10-01V-FIX: do NOT expose PostgreSQL port to the host.
+    # Database communication stays inside the Compose network only.
+    # Remove the ports section entirely — app and worker connect via
+    # the internal service name "postgres:5432".
+    # If external access is needed for debugging, use:
+    #   docker compose exec postgres psql -U str -d str_platform
+    expose:
+      - "5432"
+    volumes:
+      - str-staging-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U str -d str_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  app:
+    image: str-platform:staging
+    container_name: str-staging-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      STR_WORKER: "false"
+    env_file:
+      - .env.staging
+    ports:
+      - "3000:3000"
+    # NO source mounts — uses the built production image only.
+    restart: always
+    command: ["node", "server.js"]
+
+  worker:
+    image: str-platform:staging
+    container_name: str-staging-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+      STR_WORKER: "true"
+    env_file:
+      - .env.staging
+    # NO source mounts — uses the built production image only.
+    # Worker entry point: real outbox dispatcher (G10-01).
+    restart: always
+    command: ["bun", "run", "src/worker/index.ts"]
+
+volumes:
+  str-staging-pgdata:

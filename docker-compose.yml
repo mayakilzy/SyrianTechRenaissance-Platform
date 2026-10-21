@@ -96,9 +96,10 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    # The worker entrypoint is added in G07; for G01 we just keep the process
-    # alive so the service is healthy and the topology is demonstrable.
-    command: bun run src/worker/keepalive.ts
+    # G10-01: real outbox worker (replaces G01 keepalive placeholder).
+    # runWorkerLoop polls OutboxEvents, claims IntegrationJobs, and
+    # handles recovery/timeout. Graceful shutdown on SIGTERM.
+    command: bun run src/worker/index.ts
     restart: unless-stopped
 
 volumes:

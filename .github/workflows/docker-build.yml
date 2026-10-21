@@ -1,0 +1,174 @@
+name: STR Platform — Docker Production Build
+
+# G10-01 RUNTIME ROOT-CAUSE CLOSURE: verify the production Docker image
+# builds AND the web server starts AND responds with HTTP 200.
+# All checks are mandatory — no continue-on-error, no || echo masking.
+
+on:
+  push:
+    branches: ["feat/g10-runtime-foundation"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build:
+    name: Docker Production Image Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: prod
+          tags: str-platform:ci-build-test
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify production image artifacts
+        run: |
+          set -euo pipefail
+          echo "Checking worker entry point..."
+          docker run --rm str-platform:ci-build-test ls -la src/worker/index.ts
+          echo "Checking tsconfig.json..."
+          docker run --rm str-platform:ci-build-test ls -la tsconfig.json
+          echo "Checking package.json..."
+          docker run --rm str-platform:ci-build-test ls -la package.json
+          echo "Checking bun.lock..."
+          docker run --rm str-platform:ci-build-test ls -la bun.lock
+          echo "Checking Prisma client..."
+          docker run --rm str-platform:ci-build-test ls -la node_modules/.prisma/client/index.js
+          echo "Checking standalone server.js..."
+          docker run --rm str-platform:ci-build-test ls -la server.js
+          echo "Checking installed Next.js version..."
+          docker run --rm str-platform:ci-build-test node -e "console.log(require('next/package.json').version)"
+          echo "All production image artifacts verified."
+
+      - name: Verify web server starts and responds with HTTP 200
+        run: |
+          set -euo pipefail
+          # Start the web server in detached mode (no --rm so we can capture logs).
+          # HOSTNAME=0.0.0.0 is required for the standalone server to accept
+          # connections from outside the container.
+          docker run -d --name str-web-test \
+            -e NODE_ENV=production \
+            -e HOSTNAME=0.0.0.0 \
+            -e PORT=3000 \
+            -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
+            -e AUTH_SECRET="ci-placeholder-secret-at-least-16-chars" \
+            -p 3001:3000 \
+            str-platform:ci-build-test node server.js
+
+          # Wait for container to start
+          sleep 5
+
+          # Check if container is still running (crash detection)
+          if ! docker ps --filter name=str-web-test --filter status=running | grep -q str-web-test; then
+            echo "ERROR: Container str-web-test is not running (crashed on startup)."
+            echo "=== Container logs ==="
+            docker logs str-web-test 2>&1 || echo "(no logs available)"
+            docker rm str-web-test 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== Container is running. Startup logs: ==="
+          docker logs str-web-test 2>&1 || true
+
+          # Bounded polling: wait up to 20s for the health endpoint.
+          for i in $(seq 1 20); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Web server responded with HTTP 200 on attempt $i"
+              curl -s http://localhost:3001/api/v1/health | python3 -m json.tool
+              docker stop str-web-test 2>/dev/null || true
+              docker rm str-web-test 2>/dev/null || true
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $HTTP_CODE, waiting..."
+            sleep 1
+          done
+
+          # If we get here, the server didn't respond.
+          echo "ERROR: Web server did not respond with HTTP 200 within 20 seconds."
+          echo "=== Final container logs ==="
+          docker logs str-web-test 2>&1 || true
+          docker stop str-web-test 2>/dev/null || true
+          docker rm str-web-test 2>/dev/null || true
+          exit 1
+
+      - name: Verify worker entry point resolves imports
+        run: |
+          set -euo pipefail
+          echo "Verifying worker entry point imports resolve..."
+          # Run the worker for 5 seconds. We use timeout to kill it after 5s
+          # because the worker will run forever (or until DB error).
+          #
+          # Exit code classification:
+          #   0  = worker exited cleanly (unexpected but not a failure)
+          #   124 = timeout killed it (expected — worker was still running,
+          #         meaning imports resolved and the loop started)
+          #   1  = worker crashed on startup (import failure, syntax error,
+          #         module not found — THIS IS A FAILURE)
+          #   2+ = other errors (THIS IS A FAILURE)
+          #
+          # We capture stdout+stderr to check for import errors, then
+          # classify the exit code deterministically.
+          WORKER_OUTPUT=$(timeout 5 docker run --rm \
+            -e NODE_ENV=production \
+            -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
+            -e AUTH_SECRET="ci-placeholder-secret-at-least-16-chars" \
+            str-platform:ci-build-test bun run src/worker/index.ts 2>&1) || WORKER_EXIT=$?
+
+          WORKER_EXIT=${WORKER_EXIT:-0}
+          echo "$WORKER_OUTPUT"
+
+          # Check for import/module resolution errors in output
+          if echo "$WORKER_OUTPUT" | grep -qiE "Cannot find module|ERR_MODULE_NOT_FOUND|SyntaxError|TypeError.*import|Failed to resolve"; then
+            echo "ERROR: Worker has import/module resolution failures."
+            exit 1
+          fi
+
+          # Classify exit code
+          case $WORKER_EXIT in
+            0)
+              echo "✅ Worker exited cleanly (code 0)."
+              ;;
+            124)
+              echo "✅ Worker was running for 5s then killed by timeout (code 124). Imports resolved, loop started."
+              ;;
+            *)
+              # Exit codes 1, 2, etc. could be DB connection errors (expected)
+              # OR genuine startup failures. We already checked for import
+              # errors above. If the output contains "worker.entry.start"
+              # or "outbox.worker.start", the worker STARTED successfully
+              # and the exit was due to DB unavailability (expected).
+              if echo "$WORKER_OUTPUT" | grep -q "worker.entry.start\|outbox.worker.start"; then
+                echo "✅ Worker started successfully, then exited (code $WORKER_EXIT) due to DB unavailability (expected without PostgreSQL)."
+              else
+                echo "ERROR: Worker exited with code $WORKER_EXIT without showing startup logs. Possible startup failure."
+                exit 1
+              fi
+              ;;
+          esac
+
+          echo "Worker entry point verification PASSED."
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop str-web-test 2>/dev/null || true
+          docker rm str-web-test 2>/dev/null || true

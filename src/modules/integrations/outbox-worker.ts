@@ -217,20 +217,83 @@ export async function checkTimeouts(): Promise<number> {
   return timedOut.count;
 }
 
-export async function runWorkerLoop(): Promise<void> {
-  logger.info("outbox.worker.start", { workerId: WORKER_ID });
-  
-  while (true) {
+/**
+ * Cancellation-aware sleep helper.
+ *
+ * Returns a promise that resolves after `ms` milliseconds OR when the
+ * AbortSignal fires — whichever comes first.
+ *
+ * G10-01 FINAL HARDENING: this replaces the inline Promise.race pattern
+ * that leaked timers and event listeners. This helper guarantees:
+ *   1. The setTimeout is cleared on abort (no dangling timer).
+ *   2. The abort listener is removed on timeout (no dangling listener).
+ *   3. No resource accumulation across loop iterations.
+ */
+function cancellableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+  if (signal.aborted) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * Run the outbox worker loop until the abort signal fires.
+ *
+ * G10-01 FINAL HARDENING: graceful shutdown via AbortSignal.
+ * - SIGTERM/SIGINT triggers abort → loop exits after current iteration.
+ * - Abort is checked at THREE points each iteration:
+ *   1. Top of while loop (before recovery)
+ *   2. After recovery + timeout checks (before claiming a new job)
+ *   3. During poll sleep (interruptible via cancellableSleep)
+ * - No new job is claimed after abort is requested.
+ * - The poll sleep uses cancellableSleep — no timer/listener leaks.
+ * - In-flight job processing completes naturally; the lease mechanism
+ *   ensures recovery if the process is killed before completion.
+ * - After the loop exits, the function returns (worker exits cleanly).
+ *
+ * @param signal Optional AbortSignal. When aborted, the loop stops.
+ *               If not provided, the loop runs forever (backwards compat
+ *               for tests that call runWorkerLoop() directly).
+ */
+export async function runWorkerLoop(signal?: AbortSignal): Promise<void> {
+  logger.info("outbox.worker.start", { workerId: WORKER_ID, hasAbortSignal: !!signal });
+
+  while (!signal?.aborted) {
     try {
       await recoverAbandonedJobs();
       await checkTimeouts();
+
+      // G10-01 FINAL HARDENING: check abort BEFORE claiming a new job.
+      // Recovery and timeout checks may take time; the signal could have
+      // fired during those operations. Do NOT claim a new job if aborting.
+      if (signal?.aborted) {
+        break;
+      }
+
       const hadJob = await processNextOutboxEvent();
-      if (!hadJob) await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      if (!hadJob) {
+        await cancellableSleep(POLL_INTERVAL_MS, signal);
+      }
     } catch (e) {
       logger.error("outbox.worker.error", { error: e instanceof Error ? e.message : String(e) });
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      await cancellableSleep(POLL_INTERVAL_MS, signal);
     }
   }
+
+  logger.info("outbox.worker.shutdown.complete", { workerId: WORKER_ID });
 }
 
 if (require.main === module) {
