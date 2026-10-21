@@ -517,3 +517,81 @@ resolved before production launch. They do NOT block staging.
 | 5 | Google OIDC credentials and redirect configuration | Pending (requires founder OAuth app) |
 
 These remain production blockers and are tracked separately from G10-03.
+
+---
+
+## 12. Verification Status (G10-03-VALIDATION-01)
+
+This runbook is **documented** but backup/restore procedures have NOT
+been empirically tested end-to-end in CI. Operators must treat the
+procedures as written guidance, not as a verified PASS.
+
+### 12.1 What is documented only (NOT empirically tested)
+
+| Procedure | Status | Reason |
+|-----------|--------|--------|
+| §2.2 Manual backup (`pg_dump`) | DOCUMENTED | Not run in CI. Verified manually when staging is deployed. |
+| §3.2 Restore into existing DB | DOCUMENTED | Not run in CI. Verified manually when staging is deployed. |
+| §3.3 Restore into fresh DB | DOCUMENTED | Not run in CI. Verified manually when staging is deployed. |
+| §2.5 Scheduled backup cron | DOCUMENTED | Not run in CI. Requires MASTER to install on server. |
+| §4.4 Migration rollback test | DOCUMENTED | Not run in CI. Staging-only acceptance requirement. |
+| §5.3 Secret rotation | DOCUMENTED | Not run in CI. |
+
+### 12.2 What IS empirically tested in CI
+
+| Capability | Status | CI workflow |
+|-----------|--------|-------------|
+| PostgreSQL 17 starts + healthcheck passes | TESTED | G10-02 integration CI (B1-B5) |
+| `prisma migrate deploy` completes | TESTED | G10-02 integration CI + G10-03 staging validation CI (C2) |
+| App starts and `/api/v1/health` returns 200 | TESTED | G10-02 integration CI + G10-03 staging validation CI (C4) |
+| App starts and `/api/v1/ready` returns 200 | TESTED | G10-02 integration CI + G10-03 staging validation CI (C5) |
+| Worker starts and enters polling loop | TESTED | G10-02 integration CI (C1) + G10-03 staging validation CI (C6) |
+| Worker graceful shutdown on SIGTERM | TESTED | G10-02 integration CI (C3) |
+| Staging compose `migrate` service blocks app/worker | TESTED | G10-03 staging validation CI (C7) |
+| App healthcheck reaches `healthy` with `node`-based check | TESTED | G10-03 staging validation CI (C4) |
+| App port is bound to `127.0.0.1` only | TESTED | G10-03 staging validation CI (B1) |
+| Postgres has no host port binding | TESTED | G10-03 staging validation CI (B2) |
+
+### 12.3 Staging-only acceptance requirements (must be done on staging server)
+
+These MUST be performed on the actual staging server before declaring
+staging "production-ready":
+
+1. **Backup-and-restore round trip**: take a `pg_dump` backup of staging,
+   drop the database, restore from backup, verify app starts cleanly
+   and row counts match.
+2. **Scheduled backup**: install the cron entry (§2.5), verify it runs
+   at the scheduled time and produces a non-empty backup file.
+3. **Secret rotation**: rotate `POSTGRES_PASSWORD` and `AUTH_SECRET`
+   on staging, verify the app still works after restart.
+4. **Migration rollback**: apply a new migration on staging, take a
+   backup, restore the pre-migration backup, verify the app starts
+   cleanly with the rolled-back schema.
+
+### 12.4 Production readiness requirements (do NOT block staging)
+
+These MUST be resolved before production launch. None block staging:
+
+1. Test email file permissions (G02 carry-over).
+2. Prevent `STR_TEST_MODE` in production (G02 carry-over).
+3. Real email delivery service (G02 carry-over).
+4. Distributed rate limiter via Redis (G02 carry-over).
+5. Google OIDC credentials + redirect test (G02 carry-over).
+6. Interrupted worker recovery during mid-processing (G10-03 NOT_TESTED —
+   per-adapter before real adapters go live).
+
+### 12.5 Reading guide
+
+When this runbook says "PASS" for a capability, it means:
+- The capability is implemented in the codebase AND
+- Either empirically tested in CI (§12.2) OR empirically tested on
+  staging (§12.3).
+
+When this runbook says "DOCUMENTED" for a procedure, it means:
+- The procedure is written down here but has NOT been run end-to-end.
+- Operators must run it manually on staging and update this section
+  before declaring staging "production-ready".
+
+This distinction was added in G10-03-VALIDATION-01 per MASTER directive:
+"Avoid claiming backup/restore PASS until a real disposable
+backup-and-restore test succeeds."

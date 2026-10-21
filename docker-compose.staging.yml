@@ -100,18 +100,41 @@ services:
       LOG_FORMAT: json
       LOG_LEVEL: info
       STR_WORKER: "false"
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
     env_file:
       - .env.staging
+    # G10-03-VALIDATION B-fix: bind to 127.0.0.1 only.
+    # The staging app must NOT be reachable directly from the public
+    # internet. Traffic must go through the reverse proxy (Caddy / NPM).
+    #
+    # Two deployment topologies are documented in staging-deployment.md §7:
+    #   1. Proxy runs ON THE HOST (e.g., Caddy installed as a system
+    #      service). The proxy connects to 127.0.0.1:3000 — this default
+    #      binding supports that topology.
+    #   2. Proxy runs INSIDE A DOPER CONTAINER. Both proxy and app must
+    #      share a Docker network, and the app's ports mapping can be
+    #      removed entirely (only `expose: ["3000"]` is needed).
+    #      See staging-deployment.md §7.2 for the override snippet.
+    #
+    # Default (this file): topology #1. Override for topology #2
+    # is documented in the runbook and is a one-line change.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     # NO source mounts — uses the built production image only.
-    # G10-03: healthcheck uses the liveness endpoint.
-    # Liveness returns 200 as long as the process can serve HTTP.
-    # Readiness (/api/v1/ready) is intentionally NOT used here — that would
-    # mark the container unhealthy during a transient DB outage and cause
-    # an unwanted restart cycle. Use readiness only at the load balancer.
+    #
+    # G10-03-VALIDATION A-fix: healthcheck uses `node`, not `curl`.
+    # The `oven/bun:1.3` base image (Debian slim) does NOT include
+    # `curl`. `node` is guaranteed present because the prod runtime is
+    # `node server.js` (verified by docker-build CI). `fetch` is
+    # available in Node 18+ (Next.js 16 requires Node 20+).
+    #
+    # The check returns exit 0 on HTTP 200, exit 1 otherwise.
+    # We use the LIVENESS endpoint (always 200 when process is alive)
+    # rather than readiness (which would mark the container unhealthy
+    # during a transient DB outage and cause restart cycles).
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:3000/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 5

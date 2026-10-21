@@ -332,7 +332,74 @@ curl -fsS http://localhost:3000/api/v1/ready | jq .
 - **Nginx Proxy Manager (NPM)** — web UI, multi-domain, good for teams
   that prefer GUI over config files.
 
-### 7.2 Caddy configuration
+### 7.2 Choose the proxy deployment topology (MASTER decision)
+
+The reverse proxy can run in two places. The staging compose's default
+port binding (`127.0.0.1:3000:3000`) supports topology #1 directly.
+Topology #2 requires a one-line override documented below.
+
+`REQUIRES_MASTER_INPUT`: MASTER must choose ONE topology.
+
+#### Topology #1 — Proxy on the host (default)
+
+The reverse proxy runs as a system service on the host (e.g., `caddy`
+installed via apt, or NPM installed as a Docker container with
+`network_mode: host`). The proxy connects to `127.0.0.1:3000` on the
+host, which is the default binding in `docker-compose.staging.yml`.
+
+- ✅ Default — no compose override needed.
+- ✅ The app is NOT exposed publicly (only the proxy can reach it).
+- ✅ The proxy terminates TLS, forwards plain HTTP to the app.
+- ✅ Simple to operate — proxy and app are independent services.
+- ⚠️ Requires the proxy to be installed as a system service (not in
+  Docker) OR running with `network_mode: host`.
+
+Verify the binding after starting the stack:
+
+```bash
+docker port str-staging-app
+# Expected: 3000/tcp -> 127.0.0.1:3000
+# NOT:       3000/tcp -> 0.0.0.0:3000 (that would be public)
+```
+
+#### Topology #2 — Proxy in a Docker container
+
+The reverse proxy runs in its own Docker container on the same Docker
+network as the STR stack. The proxy connects to the app by service name
+(`app:3000`) over the internal Docker network. The app's `ports:` mapping
+is removed entirely — only `expose: ["3000"]` is needed.
+
+Create `docker-compose.proxy-override.yml`:
+
+```yaml
+# Override file for Topology #2 (proxy in Docker)
+# Usage:
+#   docker compose -f docker-compose.staging.yml \
+#                  -f docker-compose.proxy-override.yml up -d
+services:
+  app:
+    ports: !reset []
+    expose:
+      - "3000"
+  # Optional: add the proxy service itself here, or run it separately.
+```
+
+Then run the stack with both files:
+
+```bash
+docker compose -f docker-compose.staging.yml \
+               -f docker-compose.proxy-override.yml up -d
+```
+
+- ✅ No host port binding at all — the app is reachable only inside the
+  Docker network.
+- ✅ Cleaner isolation — no host process listens on 3000.
+- ✅ Proxy and app share a Docker network and are managed together.
+- ⚠️ Requires the proxy container to be on the same Docker network as
+  the STR stack (Compose creates a default network per project; the
+  proxy must join it).
+
+### 7.3 Caddy configuration (Topology #1 — proxy on host)
 
 `REQUIRES_MASTER_INPUT`: the staging domain name.
 
@@ -340,7 +407,7 @@ Create `/etc/caddy/Caddyfile` (or `~/Caddyfile` if running Caddy as root):
 
 ```caddyfile
 <STAGING_DOMAIN> {
-    reverse_proxy localhost:3000 {
+    reverse_proxy 127.0.0.1:3000 {
         header_up Host {host}
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
@@ -378,10 +445,63 @@ caddy start --config /etc/caddy/Caddyfile
 
 Caddy automatically provisions a Let's Encrypt certificate on first request.
 
-### 7.3 Nginx Proxy Manager configuration
+### 7.4 Caddy configuration (Topology #2 — proxy in Docker)
+
+If running Caddy as a Docker container alongside the STR stack, use
+`app:3000` as the upstream (not `127.0.0.1:3000`). Example
+`docker-compose.caddy.yml`:
+
+```yaml
+services:
+  caddy:
+    image: caddy:2
+    container_name: str-staging-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # Joins the default network of the STR stack automatically
+    # if you bring Caddy up in the same Compose project.
+
+volumes:
+  caddy_data:
+  caddy_config:
+```
+
+Caddyfile:
+
+```caddyfile
+<STAGING_DOMAIN> {
+    reverse_proxy app:3000 {
+        header_up Host {host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote_host}
+    }
+    # ... (security headers, encode, log — same as Topology #1)
+}
+```
+
+Run both stacks together (Caddy joins the same default network):
+
+```bash
+docker compose -f docker-compose.staging.yml \
+               -f docker-compose.proxy-override.yml \
+               -f docker-compose.caddy.yml up -d
+```
+
+### 7.5 Nginx Proxy Manager configuration
 
 `REQUIRES_MASTER_INPUT`: MASTER must provide NPM admin credentials and
 confirm NPM is reachable on the staging server (typically ports 80, 81, 443).
+
+NPM runs as a Docker container by default. If using Topology #1 (NPM
+with `network_mode: host`), forward to `localhost:3000`. If using
+Topology #2 (NPM on the same Docker network), forward to `app:3000`.
 
 Via the NPM web UI (usually `http://<server-ip>:81`):
 
@@ -393,17 +513,16 @@ Via the NPM web UI (usually `http://<server-ip>:81`):
 2. **Hosts → Proxy Hosts → Add Proxy Host**
    - Domain Names: `<STAGING_DOMAIN>`
    - Scheme: `http`
-   - Forward Hostname / IP: `localhost` (or the Docker bridge IP)
+   - Forward Hostname / IP: `localhost` (Topology #1) or `app` (Topology #2)
    - Forward Port: `3000`
    - **Block Common Exploits**: enabled
-   - **Websockets Support**: enabled (STR app uses websockets for HMR
-     in dev, but not in prod — leave enabled for safety).
+   - **Websockets Support**: enabled.
    - **SSL** tab: select the Let's Encrypt cert from step 1.
      - Force SSL: ON
      - HTTP/2 Support: ON
      - HSTS: ON
 
-### 7.4 Verify HTTPS
+### 7.6 Verify HTTPS
 
 ```bash
 # DNS resolves to the server
@@ -416,7 +535,16 @@ curl -vI https://<STAGING_DOMAIN>/api/v1/health
 # App responds over HTTPS
 curl -fsS https://<STAGING_DOMAIN>/api/v1/health | jq .
 curl -fsS https://<STAGING_DOMAIN>/api/v1/ready | jq .
+
+# Verify the app is NOT directly reachable on port 3000 from outside
+# (Topology #1 default binding is 127.0.0.1 only)
+curl -vI http://<server-public-ip>:3000/api/v1/health
+# Expected: connection refused or timeout (NOT HTTP 200)
 ```
+
+If the last curl succeeds, the app is publicly exposed — STOP and
+verify the port binding (`docker port str-staging-app` should show
+`127.0.0.1:3000`, not `0.0.0.0:3000`).
 
 ---
 
@@ -634,3 +762,60 @@ To enable:
 | 10.1 S3 / Object Storage | NO (optional, MASTER-authorized) |
 | 10.2 SMTP / Email Service | NO (optional, MASTER-authorized) |
 | 10.3 Google OAuth | NO (optional, MASTER-authorized) |
+
+---
+
+## 12. Verification Status (G10-03-VALIDATION-01)
+
+This runbook is **documented** as a procedure. The procedure itself
+has NOT been empirically executed end-to-end on a real server. CI
+empirically verifies the staging **compose file** (see
+`.github/workflows/g10-03-staging-validation.yml`), but the procedure
+of deploying to an actual server requires MASTER's server access.
+
+### 12.1 What is empirically tested in CI
+
+| Step | Tested? | CI workflow |
+|------|---------|-------------|
+| 4. PostgreSQL initialization (start + healthcheck) | TESTED | G10-02 integration CI + G10-03 staging validation CI (C1) |
+| 5. Migration execution via `migrate` compose service | TESTED | G10-03 staging validation CI (C2) |
+| 6. Web + worker startup (depends_on migrate) | TESTED | G10-03 staging validation CI (C3) |
+| 6. App healthcheck reaches `healthy` | TESTED | G10-03 staging validation CI (C4) |
+| 8. Readiness endpoint returns HTTP 200 | TESTED | G10-03 staging validation CI (C5) |
+| 6. Worker enters polling loop | TESTED | G10-03 staging validation CI (C6) |
+| 5. Failed migration blocks app/worker startup | TESTED | G10-03 staging validation CI (C7) |
+| 7. App port bound to `127.0.0.1` only | TESTED | G10-03 staging validation CI (B1) |
+| 4. Postgres NOT exposed to host | TESTED | G10-03 staging validation CI (B2) |
+
+### 12.2 What is DOCUMENTED only (NOT empirically tested)
+
+| Step | Status | Reason |
+|------|--------|--------|
+| 1. Server prerequisites | DOCUMENTED | Requires actual server. MASTER provides specs. |
+| 2. `.env.staging` generation on real server | DOCUMENTED | CI uses synthetic credentials, not real ones. |
+| 3. Production image build on real server | DOCUMENTED | CI builds the image; real server build is operator's responsibility. |
+| 7. HTTPS + reverse proxy (Caddy OR NPM) | DOCUMENTED | Requires real domain + Let's Encrypt + DNS. |
+| 8. Post-deployment smoke tests on real server | DOCUMENTED | CI runs smoke tests against `localhost:3000`; real server smoke requires HTTPS. |
+| 9. Rollback and recovery procedures | DOCUMENTED | Per-failure-mode procedures documented; not all have been run end-to-end. |
+
+### 12.3 Staging-only acceptance requirements
+
+Before declaring staging "production-ready", these MUST be performed
+on the actual staging server:
+
+1. **End-to-end deployment** following §1–§8 of this runbook.
+2. **Backup-and-restore round trip** (see `backup-restore.md` §12.3).
+3. **Reverse proxy verification** — both that HTTPS works AND that
+   the app is NOT directly reachable on port 3000 (§7.6).
+4. **Migration rollback drill** — apply a new migration, take a backup,
+   restore the pre-migration backup, verify the app starts cleanly.
+5. **Worker graceful shutdown on the real server** — `docker compose
+   stop worker`, verify exit 0 and `outbox.worker.shutdown.complete`
+   log entry appears.
+6. **Log inspection** — verify structured JSON logs are emitted, `reqId`
+   correlation works, no secret leakage.
+
+### 12.4 Production readiness requirements (do NOT block staging)
+
+See `backup-restore.md` §12.4 for the full list. None block staging.
+All MUST be resolved before production go-live.
