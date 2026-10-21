@@ -231,11 +231,13 @@ jobs:
 
       - name: C1 — Worker startup verification
         run: |
-          set -euo pipefail
+          set -uo pipefail
           echo "Test: Worker container is running"
-          if docker ps --filter name=g10-02-worker --filter status=running | grep -q g10-02-worker; then
+          # Use || true to prevent grep from failing the step (exit 141 = SIGPIPE from head)
+          if docker ps --filter name=g10-02-worker --filter status=running 2>/dev/null | grep -q g10-02-worker; then
             echo "PASS: Worker container is running"
-            docker logs g10-02-worker 2>&1 | head -20
+            docker logs g10-02-worker 2>&1 | head -20 || true
+            exit 0
           else
             echo "FAIL: Worker container is not running"
             docker logs g10-02-worker 2>&1 || true
