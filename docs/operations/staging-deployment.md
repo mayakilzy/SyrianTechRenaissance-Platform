@@ -211,14 +211,14 @@ If the smoke test fails, DO NOT proceed. The image is broken.
 ### 4.1 Start postgres only
 
 ```bash
-docker compose -f docker-compose.staging.yml up -d postgres
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d postgres
 ```
 
 ### 4.2 Wait for healthcheck
 
 ```bash
 # Wait until postgres is healthy
-docker compose -f docker-compose.staging.yml exec postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres \
   pg_isready -U str -d str_platform
 
 # Verify the data volume was created
@@ -243,7 +243,7 @@ incorrectly. STOP and verify.
 ### 5.1 Run the migrate service
 
 ```bash
-docker compose -f docker-compose.staging.yml up migrate
+docker compose --env-file .env.staging -f docker-compose.staging.yml up migrate
 ```
 
 This runs `bunx prisma migrate deploy` against the staging database.
@@ -260,7 +260,7 @@ All migrations applied successfully.
 
 If any migration fails:
 
-- Check `docker compose -f docker-compose.staging.yml logs migrate` for details.
+- Check `docker compose --env-file .env.staging -f docker-compose.staging.yml logs migrate` for details.
 - DO NOT proceed to step 6.
 - Common causes: wrong `DATABASE_URL`, postgres not healthy, conflicting
   schema state from a previous deployment.
@@ -270,7 +270,7 @@ If any migration fails:
 ```bash
 # Run inside the app container once it's up (after step 7)
 # OR run it as a one-shot:
-docker compose -f docker-compose.staging.yml run --rm app bun run db:seed
+docker compose --env-file .env.staging -f docker-compose.staging.yml run --rm app bun run db:seed
 ```
 
 The seed creates:
@@ -288,7 +288,7 @@ The seed creates:
 ### 6.1 Start app + worker
 
 ```bash
-docker compose -f docker-compose.staging.yml up -d app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d app worker
 ```
 
 The staging compose (post-G10-03 hardening) ensures:
@@ -302,7 +302,7 @@ The staging compose (post-G10-03 hardening) ensures:
 
 ```bash
 # 1. Containers are running
-docker compose -f docker-compose.staging.yml ps
+docker compose --env-file .env.staging -f docker-compose.staging.yml ps
 # All three: postgres, app, worker should show "running" or "healthy"
 
 # 2. App healthcheck passes
@@ -310,7 +310,7 @@ docker inspect --format='{{.State.Health.Status}}' str-staging-app
 # Expected: "healthy" (may take ~30s after start)
 
 # 3. Worker entered the polling loop
-docker compose -f docker-compose.staging.yml logs --tail=10 worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs --tail=10 worker
 # Look for: {"level":"info","msg":"worker.entry.start",...}
 # and: {"level":"info","msg":"outbox.worker.start",...}
 
@@ -374,7 +374,7 @@ Create `docker-compose.proxy-override.yml`:
 ```yaml
 # Override file for Topology #2 (proxy in Docker)
 # Usage:
-#   docker compose -f docker-compose.staging.yml \
+#   docker compose --env-file .env.staging -f docker-compose.staging.yml \
 #                  -f docker-compose.proxy-override.yml up -d
 services:
   app:
@@ -387,7 +387,7 @@ services:
 Then run the stack with both files:
 
 ```bash
-docker compose -f docker-compose.staging.yml \
+docker compose --env-file .env.staging -f docker-compose.staging.yml \
                -f docker-compose.proxy-override.yml up -d
 ```
 
@@ -489,7 +489,7 @@ Caddyfile:
 Run both stacks together (Caddy joins the same default network):
 
 ```bash
-docker compose -f docker-compose.staging.yml \
+docker compose --env-file .env.staging -f docker-compose.staging.yml \
                -f docker-compose.proxy-override.yml \
                -f docker-compose.caddy.yml up -d
 ```
@@ -588,7 +588,7 @@ curl -fsSI https://<STAGING_DOMAIN>/ar/auth/signup
 ```bash
 # Submit a test job via the integrations API (requires auth — skip in pure smoke)
 # OR: check that the worker is alive and has no errors
-docker compose -f docker-compose.staging.yml logs --tail=50 worker | grep -E "outbox\.worker\.start|outbox\.worker\.error"
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs --tail=50 worker | grep -E "outbox\.worker\.start|outbox\.worker\.error"
 # Expected: at least one "outbox.worker.start" and no "outbox.worker.error" entries
 ```
 
@@ -596,7 +596,7 @@ docker compose -f docker-compose.staging.yml logs --tail=50 worker | grep -E "ou
 
 ```bash
 # From inside the postgres container
-docker compose -f docker-compose.staging.yml exec postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres \
   psql -U str -d str_platform -c "SELECT COUNT(*) FROM \"User\";"
 # Expected: a number (0 if not seeded, 1 if seeded)
 ```
@@ -620,13 +620,13 @@ git checkout $LAST_GOOD
 docker build --target prod -t str-platform:staging .
 
 # 4. Stop app + worker
-docker compose -f docker-compose.staging.yml stop app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml stop app worker
 
 # 5. If migrations were applied that are not present in $LAST_GOOD,
 #    restore from a backup taken BEFORE the upgrade (see backup-restore.md §3.2).
 
 # 6. Restart services
-docker compose -f docker-compose.staging.yml up -d
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
 ```
 
 ### 9.2 Recovery from database corruption
@@ -637,23 +637,23 @@ See `backup-restore.md` §3.3 (restore into a fresh database).
 
 ```bash
 # If the worker is not processing jobs and logs show no errors:
-docker compose -f docker-compose.staging.yml restart worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml restart worker
 
 # If that doesn't work, force recreate:
-docker compose -f docker-compose.staging.yml up -d --force-recreate worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --force-recreate worker
 ```
 
 ### 9.4 Recovery from a postgres crash
 
 ```bash
 # 1. Check postgres logs
-docker compose -f docker-compose.staging.yml logs --tail=100 postgres
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs --tail=100 postgres
 
 # 2. If the volume is intact, just restart:
-docker compose -f docker-compose.staging.yml restart postgres
+docker compose --env-file .env.staging -f docker-compose.staging.yml restart postgres
 
 # 3. Wait for healthcheck to pass
-docker compose -f docker-compose.staging.yml exec postgres pg_isready -U str -d str_platform
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres pg_isready -U str -d str_platform
 
 # 4. App and worker will recover automatically (readiness endpoint will
 #    return 200 once postgres is back).
@@ -696,7 +696,7 @@ To enable:
    ```
 3. The `getFileReadUrl` function in `src/modules/projects/file-evidence.ts`
    must be updated to generate real signed URLs.
-4. Restart the app: `docker compose -f docker-compose.staging.yml restart app`.
+4. Restart the app: `docker compose --env-file .env.staging -f docker-compose.staging.yml restart app`.
 
 ### 10.2 SMTP / Email Service
 
@@ -718,7 +718,7 @@ To enable:
 4. Update `getEmailService()` factory to return `SmtpEmailService` when
    `SMTP_HOST` is set.
 5. Configure SPF, DKIM, and DMARC for the sending domain.
-6. Restart the app: `docker compose -f docker-compose.staging.yml restart app`.
+6. Restart the app: `docker compose --env-file .env.staging -f docker-compose.staging.yml restart app`.
 
 ### 10.3 Google OAuth
 
@@ -738,7 +738,7 @@ To enable:
    build time based on env vars — see `next.config.ts`):
    ```bash
    docker build --target prod -t str-platform:staging .
-   docker compose -f docker-compose.staging.yml up -d app
+   docker compose --env-file .env.staging -f docker-compose.staging.yml up -d app
    ```
 5. Test the full Google sign-in + account linking flow in staging.
 6. Verify safe linking: Google email collision with existing account

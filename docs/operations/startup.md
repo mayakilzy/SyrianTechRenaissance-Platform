@@ -56,10 +56,10 @@ bun run dev
 docker build --target prod -t str-platform:staging .
 
 # Start the staging stack (postgres + migrate + app + worker)
-docker compose -f docker-compose.staging.yml up -d
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
 
 # Or start only specific services
-docker compose -f docker-compose.staging.yml up -d postgres migrate app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d postgres migrate app worker
 ```
 
 ### Differences from dev:

@@ -47,7 +47,7 @@ BACKUP_DIR="${STR_BACKUP_DIR:-$HOME/str-backups}"
 mkdir -p "$BACKUP_DIR"
 
 # Logical backup (small, portable, restorable across PG versions)
-docker compose -f docker-compose.staging.yml exec -T postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T postgres \
   pg_dump -U str -d str_platform --no-owner --clean --if-exists \
   > "$BACKUP_DIR/str-staging-$TS.sql"
 
@@ -90,7 +90,7 @@ approve the script's installation on the server.
 
 ### 3.1 Pre-restore checklist
 
-- [ ] Confirm the target environment is stopped: `docker compose -f docker-compose.staging.yml stop app worker`
+- [ ] Confirm the target environment is stopped: `docker compose --env-file .env.staging -f docker-compose.staging.yml stop app worker`
 - [ ] Confirm the backup file exists and the SHA256 matches.
 - [ ] Confirm the postgres container is still running (do NOT destroy it
       unless you intend to recreate the database from scratch).
@@ -101,14 +101,14 @@ approve the script's installation on the server.
 BACKUP_FILE="/path/to/str-staging-YYYYMMDDTHHMMSSZ.sql"
 
 # Stop app + worker (postgres stays up)
-docker compose -f docker-compose.staging.yml stop app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml stop app worker
 
 # Restore
-docker compose -f docker-compose.staging.yml exec -T postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T postgres \
   psql -U str -d str_platform < "$BACKUP_FILE"
 
 # Restart app + worker
-docker compose -f docker-compose.staging.yml up -d app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d app worker
 
 # Verify readiness
 curl -fsS http://localhost:3000/api/v1/ready
@@ -120,23 +120,23 @@ Use this when the volume is corrupted or you want to recreate from scratch.
 
 ```bash
 # WARNING: this destroys the existing staging database volume.
-docker compose -f docker-compose.staging.yml down -v
-docker compose -f docker-compose.staging.yml up -d postgres
+docker compose --env-file .env.staging -f docker-compose.staging.yml down -v
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d postgres
 
 # Wait for postgres to be healthy
-docker compose -f docker-compose.staging.yml exec postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres \
   pg_isready -U str -d str_platform
 
 # Apply schema (migrate deploy)
-docker compose -f docker-compose.staging.yml up migrate
+docker compose --env-file .env.staging -f docker-compose.staging.yml up migrate
 
 # Restore data
 BACKUP_FILE="/path/to/str-staging-YYYYMMDDTHHMMSSZ.sql"
-docker compose -f docker-compose.staging.yml exec -T postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T postgres \
   psql -U str -d str_platform < "$BACKUP_FILE"
 
 # Start app + worker
-docker compose -f docker-compose.staging.yml up -d app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d app worker
 ```
 
 ### 3.4 Post-restore verification
@@ -149,12 +149,12 @@ curl -fsS http://localhost:3000/api/v1/health | jq .
 curl -fsS http://localhost:3000/api/v1/ready | jq .
 
 # 3. Row counts (sanity)
-docker compose -f docker-compose.staging.yml exec postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres \
   psql -U str -d str_platform -c \
   "SELECT (SELECT COUNT(*) FROM \"User\") AS users, (SELECT COUNT(*) FROM \"OutboxEvent\") AS outbox_events;"
 
 # 4. Worker health (logs)
-docker compose -f docker-compose.staging.yml logs --tail=20 worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs --tail=20 worker
 # Look for: outbox.worker.start
 ```
 
@@ -182,10 +182,10 @@ SHA=$(git rev-parse HEAD)
 docker build --target prod -t str-platform:staging .
 
 # Apply migrations via the migrate service (idempotent)
-docker compose -f docker-compose.staging.yml up migrate
+docker compose --env-file .env.staging -f docker-compose.staging.yml up migrate
 
 # If migrate exits 0, restart app + worker to pick up new image
-docker compose -f docker-compose.staging.yml up -d app worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d app worker
 ```
 
 ### 4.3 Rollback (staging)
@@ -207,7 +207,7 @@ docker build --target prod -t str-platform:staging .
 # ...
 
 # Restart services
-docker compose -f docker-compose.staging.yml up -d
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
 ```
 
 **Never** attempt to manually reverse a migration by editing
@@ -270,7 +270,7 @@ before staging go-live.
 
 ```bash
 # Sends SIGTERM → worker completes current iteration → exits cleanly
-docker compose -f docker-compose.staging.yml stop worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml stop worker
 # Or: docker stop str-staging-worker
 ```
 
@@ -287,7 +287,7 @@ What happens:
 
 ```bash
 # Sends SIGKILL → worker dies immediately, in-flight job is abandoned
-docker compose -f docker-compose.staging.yml kill worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml kill worker
 ```
 
 Use this only if graceful shutdown doesn't complete within 30s (the
@@ -299,7 +299,7 @@ start (after 60s lease expiration).
 ### 6.3 Restart after crash
 
 ```bash
-docker compose -f docker-compose.staging.yml up -d worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d worker
 ```
 
 The worker's `restart: always` policy handles this automatically. On
@@ -339,16 +339,16 @@ The worker has no HTTP server. Monitor via logs:
 | `outbox.worker.fatal` | Worker is exiting due to unrecoverable error. |
 
 If no `outbox.worker.start` appears within ~30s of container start, the
-worker is stuck. Restart it: `docker compose -f docker-compose.staging.yml restart worker`.
+worker is stuck. Restart it: `docker compose --env-file .env.staging -f docker-compose.staging.yml restart worker`.
 
 ### 7.3 PostgreSQL
 
 ```bash
 # Quick check
-docker compose -f docker-compose.staging.yml exec postgres pg_isready -U str -d str_platform
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres pg_isready -U str -d str_platform
 
 # Connection count
-docker compose -f docker-compose.staging.yml exec postgres \
+docker compose --env-file .env.staging -f docker-compose.staging.yml exec postgres \
   psql -U str -d str_platform -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
@@ -392,7 +392,7 @@ results, foreign key violations):
 2. Take a forensic backup of the current state (don't overwrite the
    last-known-good backup):
    ```bash
-   docker compose -f docker-compose.staging.yml exec -T postgres \
+   docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T postgres \
      pg_dump -U str -d str_platform > str-staging-forensic-$(date -u +%Y%m%dT%H%M%SZ).sql
    ```
 3. Restore from the last-known-good backup (§3.2 or §3.3).
@@ -406,12 +406,12 @@ results, foreign key violations):
 
 ```bash
 # All services, last 50 lines, follow
-docker compose -f docker-compose.staging.yml logs -f --tail=50
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs -f --tail=50
 
 # Single service
-docker compose -f docker-compose.staging.yml logs -f app
-docker compose -f docker-compose.staging.yml logs -f worker
-docker compose -f docker-compose.staging.yml logs -f postgres
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs -f app
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs -f worker
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs -f postgres
 ```
 
 ### 9.2 Filter logs by request ID
@@ -420,7 +420,7 @@ Every log line carries a `reqId` field when available. To trace a single
 request across all services:
 
 ```bash
-docker compose -f docker-compose.staging.yml logs --no-color \
+docker compose --env-file .env.staging -f docker-compose.staging.yml logs --no-color \
   | jq -c 'select(.reqId == "REQ_ID_HERE")'
 ```
 

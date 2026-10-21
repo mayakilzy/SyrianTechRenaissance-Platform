@@ -215,7 +215,7 @@ jobs:
           echo "============================================================"
           echo "C1: PostgreSQL starts and becomes healthy"
           echo "============================================================"
-          docker compose -f docker-compose.staging.yml up -d postgres
+          docker compose --env-file .env.staging -f docker-compose.staging.yml up -d postgres
           # Wait up to 60s for postgres healthy
           for i in $(seq 1 60); do
             HEALTH=$(docker inspect --format='{{.State.Health.Status}}' str-staging-postgres 2>/dev/null || echo "starting")
@@ -227,7 +227,7 @@ jobs:
           done
           if [ "$HEALTH" != "healthy" ]; then
             echo "ERROR: postgres did not become healthy within 60s."
-            docker compose -f docker-compose.staging.yml logs postgres 2>&1 || true
+            docker compose --env-file .env.staging -f docker-compose.staging.yml logs postgres 2>&1 || true
             exit 1
           fi
 
@@ -249,17 +249,17 @@ jobs:
           echo "C2: Migration service completes successfully"
           echo "============================================================"
           # Run migrate as a one-shot. It should exit 0.
-          docker compose -f docker-compose.staging.yml up migrate
+          docker compose --env-file .env.staging -f docker-compose.staging.yml up migrate
           MIGRATE_EXIT=$?
           if [ "$MIGRATE_EXIT" -ne 0 ]; then
             echo "ERROR: migrate service exited with code $MIGRATE_EXIT."
-            docker compose -f docker-compose.staging.yml logs migrate 2>&1 || true
+            docker compose --env-file .env.staging -f docker-compose.staging.yml logs migrate 2>&1 || true
             exit 1
           fi
           echo "PASS: migrate service exited 0."
 
           # Verify migrations were actually applied
-          docker compose -f docker-compose.staging.yml exec -T postgres \
+          docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T postgres \
             psql -U str -d str_platform -c "SELECT migration_name FROM \"_prisma_migrations\" ORDER BY finished_at;" \
             | tee /tmp/applied_migrations.txt
           MIG_COUNT=$(grep -c "^|" /tmp/applied_migrations.txt 2>/dev/null || echo "0")
@@ -274,7 +274,7 @@ jobs:
           echo "C3+C4+C6: Start app + worker (after migrate)"
           echo "============================================================"
           # Start app and worker. The depends_on chain enforces ordering.
-          docker compose -f docker-compose.staging.yml up -d app worker
+          docker compose --env-file .env.staging -f docker-compose.staging.yml up -d app worker
 
           # Wait up to 60s for app to be healthy (healthcheck every 15s, 5 retries, 20s start_period)
           APP_HEALTHY=0
@@ -291,7 +291,7 @@ jobs:
           if [ "$APP_HEALTHY" -ne 1 ]; then
             echo "ERROR: app did not become healthy within 120s."
             echo "=== app logs ==="
-            docker compose -f docker-compose.staging.yml logs app 2>&1 || true
+            docker compose --env-file .env.staging -f docker-compose.staging.yml logs app 2>&1 || true
             echo "=== app healthcheck output (last attempt) ==="
             docker inspect --format='{{json .State.Health}}' str-staging-app 2>/dev/null | python3 -m json.tool 2>/dev/null || true
             exit 1
@@ -342,7 +342,7 @@ jobs:
           echo "C6: Worker started successfully (entered polling loop)"
           echo "============================================================"
           # Check worker logs for outbox.worker.start
-          WORKER_LOGS=$(docker compose -f docker-compose.staging.yml logs --no-color worker 2>&1 || true)
+          WORKER_LOGS=$(docker compose --env-file .env.staging -f docker-compose.staging.yml logs --no-color worker 2>&1 || true)
           echo "$WORKER_LOGS" | tail -20
           if ! echo "$WORKER_LOGS" | grep -q "outbox.worker.start\|worker.entry.start"; then
             echo "ERROR: worker did not log 'outbox.worker.start' or 'worker.entry.start'."
@@ -378,10 +378,10 @@ jobs:
           # will block app/worker from starting.
 
           # Step 1: tear down the staging stack (preserve volume)
-          docker compose -f docker-compose.staging.yml down 2>&1 | tail -3
+          docker compose --env-file .env.staging -f docker-compose.staging.yml down 2>&1 | tail -3
 
           # Step 2: start postgres fresh
-          docker compose -f docker-compose.staging.yml up -d postgres
+          docker compose --env-file .env.staging -f docker-compose.staging.yml up -d postgres
           for i in $(seq 1 30); do
             HEALTH=$(docker inspect --format='{{.State.Health.Status}}' str-staging-postgres 2>/dev/null || echo "starting")
             if [ "$HEALTH" = "healthy" ]; then break; fi
@@ -389,7 +389,7 @@ jobs:
           done
 
           # Step 3: apply migrations normally first
-          docker compose -f docker-compose.staging.yml up migrate 2>&1 | tail -5
+          docker compose --env-file .env.staging -f docker-compose.staging.yml up migrate 2>&1 | tail -5
           MIGRATE_EXIT=${PIPESTATUS[0]}
           if [ "$MIGRATE_EXIT" -ne 0 ]; then
             echo "ERROR: clean migrate failed — cannot proceed with C7 test."
@@ -399,13 +399,13 @@ jobs:
           # Step 4: corrupt the migration history — insert a fake migration
           # that claims a non-existent migration was applied. Next `migrate deploy`
           # will detect the drift and fail.
-          docker compose -f docker-compose.staging.yml exec -T postgres \
+          docker compose --env-file .env.staging -f docker-compose.staging.yml exec -T postgres \
             psql -U str -d str_platform -c \
             "INSERT INTO \"_prisma_migrations\" (id, checksum, migration_name, logs, finished_at, applied_steps_count) VALUES ('fake-corrupt-id', '00000000000000000000000000000000', '20990101000000_fake_corrupt_migration', NULL, NOW(), 0);"
 
           # Step 5: tear down the migrate/app/worker containers and try `up` again.
-          docker compose -f docker-compose.staging.yml stop migrate app worker 2>&1 | tail -3
-          docker compose -f docker-compose.staging.yml rm -f migrate app worker 2>&1 | tail -3
+          docker compose --env-file .env.staging -f docker-compose.staging.yml stop migrate app worker 2>&1 | tail -3
+          docker compose --env-file .env.staging -f docker-compose.staging.yml rm -f migrate app worker 2>&1 | tail -3
 
           # Step 6: attempt to start app + worker. This should fail because migrate
           # depends_on postgres (healthy) but migrate itself will fail and not
@@ -415,7 +415,7 @@ jobs:
           # complete successfully. Since migrate fails, the dependent services
           # never start. We use a timeout to bound the wait.
           set +e
-          timeout 60 docker compose -f docker-compose.staging.yml up app worker 2>&1 | tee /tmp/c7_output.txt
+          timeout 60 docker compose --env-file .env.staging -f docker-compose.staging.yml up app worker 2>&1 | tee /tmp/c7_output.txt
           C7_EXIT=$?
           set -e
 
@@ -425,12 +425,12 @@ jobs:
 
           if [ -n "$APP_RUNNING" ]; then
             echo "ERROR: str-staging-app is running despite failed migration."
-            docker compose -f docker-compose.staging.yml logs app 2>&1 | tail -20
+            docker compose --env-file .env.staging -f docker-compose.staging.yml logs app 2>&1 | tail -20
             exit 1
           fi
           if [ -n "$WORKER_RUNNING" ]; then
             echo "ERROR: str-staging-worker is running despite failed migration."
-            docker compose -f docker-compose.staging.yml logs worker 2>&1 | tail -20
+            docker compose --env-file .env.staging -f docker-compose.staging.yml logs worker 2>&1 | tail -20
             exit 1
           fi
           echo "PASS: app and worker did NOT start when migration failed."
@@ -441,7 +441,7 @@ jobs:
       - name: Cleanup (always)
         if: always()
         run: |
-          docker compose -f docker-compose.staging.yml down -v 2>&1 || true
+          docker compose --env-file .env.staging -f docker-compose.staging.yml down -v 2>&1 || true
           docker stop str-healthcheck-test 2>/dev/null || true
           docker rm str-healthcheck-test 2>/dev/null || true
           # Remove the synthetic .env.staging

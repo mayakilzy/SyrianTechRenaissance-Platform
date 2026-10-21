@@ -12,10 +12,25 @@
 #   - `healthcheck` block on app so `docker compose ps` and
 #     orchestrators can detect a wedged container without manual
 #     curl probes.
+#   - G10-03-VALIDATION: app port bound to 127.0.0.1 (not 0.0.0.0).
+#   - G10-03-VALIDATION: healthcheck uses `node` (not `curl`) —
+#     `oven/bun:1.3` does not include `curl`.
 #
-# Usage:
+# Usage (CRITICAL — `--env-file` is required):
 #   docker build --target prod -t str-platform:staging .
-#   docker compose -f docker-compose.staging.yml up -d
+#   docker compose --env-file .env.staging -f docker-compose.staging.yml up -d
+#
+# Why `--env-file .env.staging` is REQUIRED:
+#   The compose file uses `${POSTGRES_PASSWORD:?...}` interpolation
+#   for the postgres service. This variable must be available AT
+#   COMPOSE-UP TIME (not just container runtime). The `env_file:`
+#   directive in each service only injects env vars INTO the running
+#   container — it does NOT make them available to compose's
+#   interpolation step. Pass `--env-file .env.staging` explicitly
+#   so compose reads the file for interpolation.
+#   Without this flag, compose will fail with:
+#     "error while interpolating services.postgres.environment.POSTGRES_PASSWORD:
+#      required variable POSTGRES_PASSWORD is missing a value"
 #
 # This compose:
 #   - Uses the PRODUCTION Docker image (target: prod)
