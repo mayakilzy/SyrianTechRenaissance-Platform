@@ -114,15 +114,58 @@ jobs:
         run: |
           set -euo pipefail
           echo "Verifying worker entry point imports resolve..."
-          # Run the worker for 5 seconds — if imports fail, it exits non-zero.
-          # We expect it to fail on DB connection (no PostgreSQL), but the
-          # IMPORT resolution must succeed before that happens.
-          timeout 5 docker run --rm \
+          # Run the worker for 5 seconds. We use timeout to kill it after 5s
+          # because the worker will run forever (or until DB error).
+          #
+          # Exit code classification:
+          #   0  = worker exited cleanly (unexpected but not a failure)
+          #   124 = timeout killed it (expected — worker was still running,
+          #         meaning imports resolved and the loop started)
+          #   1  = worker crashed on startup (import failure, syntax error,
+          #         module not found — THIS IS A FAILURE)
+          #   2+ = other errors (THIS IS A FAILURE)
+          #
+          # We capture stdout+stderr to check for import errors, then
+          # classify the exit code deterministically.
+          WORKER_OUTPUT=$(timeout 5 docker run --rm \
             -e NODE_ENV=production \
             -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
             -e AUTH_SECRET="ci-placeholder-secret-at-least-16-chars" \
-            str-platform:ci-build-test bun run src/worker/index.ts 2>&1 || true
-          echo "Worker entry point import resolution verified."
+            str-platform:ci-build-test bun run src/worker/index.ts 2>&1) || WORKER_EXIT=$?
+
+          WORKER_EXIT=${WORKER_EXIT:-0}
+          echo "$WORKER_OUTPUT"
+
+          # Check for import/module resolution errors in output
+          if echo "$WORKER_OUTPUT" | grep -qiE "Cannot find module|ERR_MODULE_NOT_FOUND|SyntaxError|TypeError.*import|Failed to resolve"; then
+            echo "ERROR: Worker has import/module resolution failures."
+            exit 1
+          fi
+
+          # Classify exit code
+          case $WORKER_EXIT in
+            0)
+              echo "✅ Worker exited cleanly (code 0)."
+              ;;
+            124)
+              echo "✅ Worker was running for 5s then killed by timeout (code 124). Imports resolved, loop started."
+              ;;
+            *)
+              # Exit codes 1, 2, etc. could be DB connection errors (expected)
+              # OR genuine startup failures. We already checked for import
+              # errors above. If the output contains "worker.entry.start"
+              # or "outbox.worker.start", the worker STARTED successfully
+              # and the exit was due to DB unavailability (expected).
+              if echo "$WORKER_OUTPUT" | grep -q "worker.entry.start\|outbox.worker.start"; then
+                echo "✅ Worker started successfully, then exited (code $WORKER_EXIT) due to DB unavailability (expected without PostgreSQL)."
+              else
+                echo "ERROR: Worker exited with code $WORKER_EXIT without showing startup logs. Possible startup failure."
+                exit 1
+              fi
+              ;;
+          esac
+
+          echo "Worker entry point verification PASSED."
 
       - name: Cleanup
         if: always()
