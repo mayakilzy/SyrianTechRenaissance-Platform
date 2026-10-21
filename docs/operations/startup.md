@@ -1,6 +1,10 @@
-# STR Platform — Operations Guide (G10-01)
+# STR Platform — Operations Guide (G10-01, updated G10-03)
 
 > How to start, stop, check, and troubleshoot the STR Platform.
+>
+> **Related runbooks (G10-03):**
+> - `staging-deployment.md` — step-by-step staging deployment procedure.
+> - `backup-restore.md` — database backup, restore, migration, and recovery.
 
 ---
 
@@ -42,15 +46,20 @@ bun run dev
 
 ## 3. Starting for Staging
 
+> **G10-03 update:** `docker-compose.staging.yml` is now a STANDALONE file
+> (not an override). It includes a `migrate` service that runs
+> `prisma migrate deploy` before app/worker start. See
+> `staging-deployment.md` for the full step-by-step procedure.
+
 ```bash
 # Build the production image
 docker build --target prod -t str-platform:staging .
 
-# Start with staging override
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# Start the staging stack (postgres + migrate + app + worker)
+docker compose -f docker-compose.staging.yml up -d
 
 # Or start only specific services
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d postgres app worker
+docker compose -f docker-compose.staging.yml up -d postgres migrate app worker
 ```
 
 ### Differences from dev:
@@ -60,6 +69,8 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d postgre
 - JSON logs (not pretty)
 - App runs `node server.js` (standalone Next.js)
 - Worker runs `bun run src/worker/index.ts` (real outbox dispatcher)
+- `migrate` service runs `prisma migrate deploy` before app/worker start
+- App has a Docker healthcheck on `/api/v1/health`
 
 ---
 
@@ -211,8 +222,9 @@ The production image:
   added, and `getEmailService()` factory updated.
 - **Scanner**: file evidence has no real scanner. The `_testMarkFileAsClean`
   function is test-only. Production needs a ClamAV or equivalent integration.
-- **Backup/Restore**: not yet documented. G10 Track 1 will create a
-  dedicated runbook for PostgreSQL backup and restore.
+- **Backup/Restore**: documented in `backup-restore.md` (G10-03). Covers
+  logical backups (`pg_dump`), restores (into existing or fresh DB), and
+  migration rollback procedures.
 
 ---
 

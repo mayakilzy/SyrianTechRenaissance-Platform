@@ -1,9 +1,17 @@
 # ============================================================
-# STR Platform — Staging Docker Compose (G10-01)
+# STR Platform — Staging Docker Compose (G10-01 + G10-03 hardening)
 # ------------------------------------------------------------
 # This is a STANDALONE staging compose file — NOT an override.
 # It does NOT inherit from docker-compose.yml to avoid merging
 # dev source mounts into the staging environment.
+#
+# G10-03 hardening additions:
+#   - `migrate` one-shot service runs `prisma migrate deploy` before
+#     app/worker start. App and worker depend on migrate completing
+#     successfully (service_completed_successfully).
+#   - `healthcheck` block on app so `docker compose ps` and
+#     orchestrators can detect a wedged container without manual
+#     curl probes.
 #
 # Usage:
 #   docker build --target prod -t str-platform:staging .
@@ -14,6 +22,7 @@
 #   - Does NOT mount source code (uses built image only)
 #   - Sets NODE_ENV=production
 #   - Configures restart: always
+#   - Runs migrations BEFORE app/worker start
 #   - Separates web and worker services (same image, different CMD)
 #
 # Prerequisites:
@@ -56,12 +65,36 @@ services:
       retries: 10
     restart: always
 
+  # G10-03: one-shot migration service.
+  # Runs `prisma migrate deploy` (idempotent — only applies pending migrations).
+  # App and worker depend on this completing successfully.
+  # On re-runs of `docker compose up`, this service reports "exited (0)" and
+  # compose skips it because migrate is already complete.
+  migrate:
+    image: str-platform:staging
+    container_name: str-staging-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+    env_file:
+      - .env.staging
+    # prisma migrate deploy is safe for re-runs — it only applies pending
+    # migrations and exits 0 if the schema is already up to date.
+    command: ["bunx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
   app:
     image: str-platform:staging
     container_name: str-staging-app
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       LOG_FORMAT: json
@@ -72,6 +105,17 @@ services:
     ports:
       - "3000:3000"
     # NO source mounts — uses the built production image only.
+    # G10-03: healthcheck uses the liveness endpoint.
+    # Liveness returns 200 as long as the process can serve HTTP.
+    # Readiness (/api/v1/ready) is intentionally NOT used here — that would
+    # mark the container unhealthy during a transient DB outage and cause
+    # an unwanted restart cycle. Use readiness only at the load balancer.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:3000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: always
     command: ["node", "server.js"]
 
@@ -81,6 +125,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       LOG_FORMAT: json
@@ -90,6 +136,10 @@ services:
       - .env.staging
     # NO source mounts — uses the built production image only.
     # Worker entry point: real outbox dispatcher (G10-01).
+    # G10-03: no HTTP healthcheck (worker has no HTTP server).
+    # Health is monitored via logs: look for `outbox.worker.start` on startup
+    # and `outbox.worker.shutdown.complete` on graceful exit. If neither
+    # appears within ~30s, the container is stuck and should be restarted.
     restart: always
     command: ["bun", "run", "src/worker/index.ts"]
 
