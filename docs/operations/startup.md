@@ -240,7 +240,7 @@ runtime integration test using Docker Compose with real PostgreSQL 17.
 # Build production image
 docker build --target prod -t str-platform:g10-02 .
 
-# Create integration compose file (or use the one in the workflow)
+# Use the persisted compose file in the repo
 docker compose -f docker-compose.integration.yml up -d postgres
 docker compose -f docker-compose.integration.yml up migrate
 docker compose -f docker-compose.integration.yml up seed

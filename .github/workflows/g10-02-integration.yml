@@ -40,96 +40,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Create integration compose file
-        run: |
-          cat > docker-compose.integration.yml << 'COMPOSE_EOF'
-          services:
-            postgres:
-              image: postgres:17-alpine
-              container_name: g10-02-postgres
-              environment:
-                POSTGRES_USER: str
-                POSTGRES_PASSWORD: integration-test-password
-                POSTGRES_DB: str_platform
-                POSTGRES_HOST_AUTH_METHOD: scram-sha-256
-              expose:
-                - "5432"
-              volumes:
-                - g10-02-pgdata:/var/lib/postgresql/data
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U str -d str_platform"]
-                interval: 3s
-                timeout: 3s
-                retries: 15
-              restart: unless-stopped
-
-            migrate:
-              image: str-platform:g10-02
-              container_name: g10-02-migrate
-              depends_on:
-                postgres:
-                  condition: service_healthy
-              environment:
-                NODE_ENV: production
-                DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
-                AUTH_SECRET: "integration-test-secret-at-least-16-chars"
-                HOSTNAME: "0.0.0.0"
-              command: ["bunx", "prisma", "migrate", "deploy"]
-              restart: "no"
-
-            seed:
-              image: str-platform:g10-02
-              container_name: g10-02-seed
-              depends_on:
-                migrate:
-                  condition: service_completed_successfully
-              environment:
-                NODE_ENV: production
-                DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
-                AUTH_SECRET: "integration-test-secret-at-least-16-chars"
-                HOSTNAME: "0.0.0.0"
-              command: ["bun", "run", "db:seed"]
-              restart: "no"
-
-            app:
-              image: str-platform:g10-02
-              container_name: g10-02-app
-              depends_on:
-                seed:
-                  condition: service_completed_successfully
-              environment:
-                NODE_ENV: production
-                DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
-                AUTH_SECRET: "integration-test-secret-at-least-16-chars"
-                HOSTNAME: "0.0.0.0"
-                PORT: "3000"
-                LOG_LEVEL: info
-                LOG_FORMAT: json
-              ports:
-                - "3001:3000"
-              restart: unless-stopped
-              command: ["node", "server.js"]
-
-            worker:
-              image: str-platform:g10-02
-              container_name: g10-02-worker
-              depends_on:
-                seed:
-                  condition: service_completed_successfully
-              environment:
-                NODE_ENV: production
-                DATABASE_URL: "postgresql://str:integration-test-password@postgres:5432/str_platform?schema=public"
-                AUTH_SECRET: "integration-test-secret-at-least-16-chars"
-                LOG_LEVEL: info
-                LOG_FORMAT: json
-                STR_WORKER: "true"
-              restart: unless-stopped
-              command: ["bun", "run", "src/worker/index.ts"]
-
-          volumes:
-            g10-02-pgdata:
-          COMPOSE_EOF
-
       - name: Start integration stack
         run: |
           set -euo pipefail
@@ -322,39 +232,67 @@ jobs:
           docker logs g10-02-worker 2>&1 | tail -20
           exit 1
 
-      - name: C3 — Worker graceful shutdown (SIGTERM)
+      - name: C3 — Worker graceful shutdown (SIGTERM + exit code 0)
         run: |
-          set -euo pipefail
-          echo "Test: Send SIGTERM to worker, verify clean exit"
-          docker stop g10-02-worker 2>/dev/null
-          sleep 3
+          set -uo pipefail
+          echo "Test: Send SIGTERM to worker, verify clean exit (code 0 + shutdown logs)"
           
-          # Check worker logs for clean shutdown
-          if docker logs g10-02-worker 2>&1 | grep -q "worker.entry.shutdown.success\|outbox.worker.shutdown.complete"; then
-            echo "PASS: Worker logged clean shutdown"
-            docker logs g10-02-worker 2>&1 | grep -E "shutdown|SIGTERM" | tail -5
+          # Send SIGTERM with a 15s grace period (default docker stop is 10s).
+          # The worker's AbortSignal handler should exit cleanly well within 15s.
+          docker stop -t 15 g10-02-worker 2>/dev/null || true
+          sleep 2
+          
+          # Get the container's exit code
+          EXIT_CODE=$(docker inspect g10-02-worker --format='{{.State.ExitCode}}' 2>/dev/null || echo "UNKNOWN")
+          echo "Container exit code: $EXIT_CODE"
+          
+          # Check worker logs for graceful shutdown messages
+          WORKER_LOGS=$(docker logs g10-02-worker 2>&1 || true)
+          
+          if echo "$WORKER_LOGS" | grep -q "worker.entry.shutdown.success"; then
+            echo "PASS: Worker logged 'worker.entry.shutdown.success'"
           else
-            echo "WARN: Worker logs don't show clean shutdown message"
-            docker logs g10-02-worker 2>&1 | tail -10
-            # Worker may have been killed by Docker's 10s default timeout
-            # before logging. Check if it stopped at all.
-            if docker ps -a --filter name=g10-02-worker --filter status=exited | grep -q g10-02-worker; then
-              echo "PASS: Worker container exited (status: exited)"
-            else
-              echo "FAIL: Worker container did not exit"
-              exit 1
-            fi
+            echo "FAIL: Worker did NOT log 'worker.entry.shutdown.success'"
+            echo "=== Worker logs (last 15 lines) ==="
+            echo "$WORKER_LOGS" | tail -15
+            exit 1
           fi
+          
+          if echo "$WORKER_LOGS" | grep -q "outbox.worker.shutdown.complete"; then
+            echo "PASS: Worker logged 'outbox.worker.shutdown.complete'"
+          else
+            echo "FAIL: Worker did NOT log 'outbox.worker.shutdown.complete'"
+            exit 1
+          fi
+          
+          if echo "$WORKER_LOGS" | grep -q "worker.entry.shutdown.signal"; then
+            echo "PASS: Worker received SIGTERM signal"
+          else
+            echo "FAIL: Worker did NOT log SIGTERM receipt"
+            exit 1
+          fi
+          
+          # Verify exit code is 0 (clean exit, not forced termination)
+          if [ "$EXIT_CODE" = "0" ]; then
+            echo "PASS: Worker exited with code 0 (clean exit)"
+          else
+            echo "FAIL: Worker exited with code $EXIT_CODE (expected 0 for graceful shutdown)"
+            echo "Non-zero exit code indicates forced termination or crash."
+            exit 1
+          fi
+          
+          echo "=== Shutdown logs ==="
+          echo "$WORKER_LOGS" | grep -E "shutdown|SIGTERM" | tail -5
 
       - name: C4 — Worker restart after shutdown
         run: |
-          set -euo pipefail
+          set -uo pipefail
           echo "Test: Restart worker after shutdown"
           docker compose -f docker-compose.integration.yml up -d worker
           sleep 5
-          if docker ps --filter name=g10-02-worker --filter status=running | grep -q g10-02-worker; then
+          if docker ps --filter name=g10-02-worker --filter status=running 2>/dev/null | grep -q g10-02-worker; then
             echo "PASS: Worker restarted successfully"
-            docker logs g10-02-worker 2>&1 | tail -5
+            docker logs g10-02-worker 2>&1 | tail -5 || true
           else
             echo "FAIL: Worker did not restart"
             docker logs g10-02-worker 2>&1 || true
