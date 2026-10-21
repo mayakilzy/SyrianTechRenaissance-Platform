@@ -1,8 +1,8 @@
 name: STR Platform — Docker Production Build
 
-# G10-01 FINAL HARDENING: verify the production Docker image builds,
-# the web server starts and responds, and the worker entry point
-# resolves its imports. All checks are mandatory — no || echo masking.
+# G10-01 RUNTIME ROOT-CAUSE CLOSURE: verify the production Docker image
+# builds AND the web server starts AND responds with HTTP 200.
+# All checks are mandatory — no continue-on-error, no || echo masking.
 
 on:
   push:
@@ -48,22 +48,22 @@ jobs:
           docker run --rm str-platform:ci-build-test ls -la tsconfig.json
           echo "Checking package.json..."
           docker run --rm str-platform:ci-build-test ls -la package.json
+          echo "Checking bun.lock..."
+          docker run --rm str-platform:ci-build-test ls -la bun.lock
           echo "Checking Prisma client..."
           docker run --rm str-platform:ci-build-test ls -la node_modules/.prisma/client/index.js
           echo "Checking standalone server.js..."
           docker run --rm str-platform:ci-build-test ls -la server.js
+          echo "Checking installed Next.js version..."
+          docker run --rm str-platform:ci-build-test node -e "console.log(require('next/package.json').version)"
           echo "All production image artifacts verified."
 
-      - name: Verify web server starts (known Next.js standalone issue — non-blocking)
-        continue-on-error: true
-        id: web-test
+      - name: Verify web server starts and responds with HTTP 200
         run: |
           set -euo pipefail
-          # Create a dummy preview-props.json to prevent ENOENT on startup.
-          # Next.js 16.x tries to read this file at runtime; it's not always
-          # generated during build. This is a known issue with standalone output.
-          # The file is empty JSON — it's only read for preview mode which we
-          # don't use in production.
+          # Start the web server in detached mode (no --rm so we can capture logs).
+          # HOSTNAME=0.0.0.0 is required for the standalone server to accept
+          # connections from outside the container.
           docker run -d --name str-web-test \
             -e NODE_ENV=production \
             -e HOSTNAME=0.0.0.0 \
@@ -71,12 +71,12 @@ jobs:
             -e DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public" \
             -e AUTH_SECRET="ci-placeholder-secret-at-least-16-chars" \
             -p 3001:3000 \
-            str-platform:ci-build-test sh -c 'echo "{}" > .next/server/preview-props.json && node server.js'
+            str-platform:ci-build-test node server.js
 
           # Wait for container to start
           sleep 5
 
-          # Check if container is still running
+          # Check if container is still running (crash detection)
           if ! docker ps --filter name=str-web-test --filter status=running | grep -q str-web-test; then
             echo "ERROR: Container str-web-test is not running (crashed on startup)."
             echo "=== Container logs ==="
@@ -92,7 +92,7 @@ jobs:
           for i in $(seq 1 20); do
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "Web server responded with 200 on attempt $i"
+              echo "✅ Web server responded with HTTP 200 on attempt $i"
               curl -s http://localhost:3001/api/v1/health | python3 -m json.tool
               docker stop str-web-test 2>/dev/null || true
               docker rm str-web-test 2>/dev/null || true
@@ -103,7 +103,7 @@ jobs:
           done
 
           # If we get here, the server didn't respond.
-          echo "ERROR: Web server did not respond with 200 within 20 seconds."
+          echo "ERROR: Web server did not respond with HTTP 200 within 20 seconds."
           echo "=== Final container logs ==="
           docker logs str-web-test 2>&1 || true
           docker stop str-web-test 2>/dev/null || true
@@ -111,11 +111,10 @@ jobs:
           exit 1
 
       - name: Verify worker entry point resolves imports
-        if: always() # Run even if web server test failed
         run: |
           set -euo pipefail
           echo "Verifying worker entry point imports resolve..."
-          # Run the worker for 2 seconds — if imports fail, it exits non-zero.
+          # Run the worker for 5 seconds — if imports fail, it exits non-zero.
           # We expect it to fail on DB connection (no PostgreSQL), but the
           # IMPORT resolution must succeed before that happens.
           timeout 5 docker run --rm \
@@ -125,18 +124,7 @@ jobs:
             str-platform:ci-build-test bun run src/worker/index.ts 2>&1 || true
           echo "Worker entry point import resolution verified."
 
-      - name: Report web server status
-        if: always()
-        run: |
-          if [ "${{ steps.web-test.outcome }}" = "failure" ]; then
-            echo "::warning::Web server container test failed. This is a known Next.js 16.x standalone issue (preview-props.json + customRoutes). The production image BUILDS correctly — the runtime crash is a Next.js version-specific issue, not a G10-01 code defect. See container logs in the previous step."
-          elif [ "${{ steps.web-test.outcome }}" = "success" ]; then
-            echo "✅ Web server container started and responded to health check."
-          else
-            echo "Web server test was skipped."
-          fi
-
-      - name: Cleanup on failure
+      - name: Cleanup
         if: always()
         run: |
           docker stop str-web-test 2>/dev/null || true

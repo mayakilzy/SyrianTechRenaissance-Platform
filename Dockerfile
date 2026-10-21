@@ -50,9 +50,16 @@ COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 # Bun runs TypeScript natively and resolves path aliases via tsconfig.json.
 # The web app runs `node server.js` (standalone); the worker runs
 # `bun run src/worker/index.ts`. Same image, different CMD.
+#
+# G10-01 RUNTIME ROOT-CAUSE FIX: copy bun.lock to prod stage so
+# 'bun install --production --frozen-lockfile' uses the EXACT same
+# dependency versions as the build stage. Without this, bun resolves
+# ^16.1.1 to the latest 16.x (e.g., 16.4.2) which has standalone
+# runtime bugs not present in 16.1.3 (the locked version).
 COPY --from=build /app/src ./src
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/bun.lock ./bun.lock
 RUN bun install --production --frozen-lockfile
 
 EXPOSE 3000
