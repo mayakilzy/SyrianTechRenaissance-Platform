@@ -5,6 +5,21 @@
 # READ-ONLY diagnostic script. MASTER executes this on the
 # staging server; GLM analyses the output.
 #
+# G10-04A-FIX-01 hardening (per MASTER review):
+#   - Never prints full /etc/docker/daemon.json — only extracts
+#     non-sensitive fields (log-driver, log-opts max-size/max-file,
+#     storage-driver, dns, bip). All other fields are masked.
+#   - Never prints Cron command lines — reports only the count of
+#     non-comment, non-empty entries per cron source, plus the
+#     presence of backup-related binaries.
+#   - Never prints the full public IP — only the first two octets
+#     (e.g., 203.0.x.x) to identify the network class. MASTER can
+#     opt in to the full IP via STR_REVEAL_PUBLIC_IP=1 if needed.
+#   - Never prints listening-socket process names (which can include
+#     user-supplied arguments). Only reports port + protocol + bound
+#     address family.
+#   - Explicitly avoids writing anywhere outside /tmp.
+#
 # THIS SCRIPT DOES NOT:
 #   - Install anything
 #   - Remove anything
@@ -13,14 +28,24 @@
 #   - Change firewall rules
 #   - Change DNS
 #   - Change container state
+#   - Print any secret, password, token, private key, or full
+#     command-line arguments from cron / process tables
 #
 # Output: structured report saved to /tmp/str-g10-04a-discovery-<ts>.txt
-# Print the file contents and share with GLM.
+# Print the file contents and share with GLM after redaction review.
 # ============================================================
 
 set -uo pipefail  # NO -e: we want to continue even if a probe fails
 
 OUTPUT_FILE="/tmp/str-g10-04a-discovery-$(date -u +%Y%m%dT%H%M%SZ).txt"
+
+# Allow MASTER to opt in to revealing the full public IP (default: masked).
+# Usage: STR_REVEAL_PUBLIC_IP=1 bash docs/operations/server-discovery.sh
+REVEAL_PUBLIC_IP="${STR_REVEAL_PUBLIC_IP:-0}"
+
+# Allow MASTER to opt in to revealing process names in `ss` output (default: hidden).
+# Usage: STR_REVEAL_PROCESS_NAMES=1 bash docs/operations/server-discovery.sh
+REVEAL_PROCESS_NAMES="${STR_REVEAL_PROCESS_NAMES:-0}"
 
 {
 echo "============================================================"
@@ -85,9 +110,44 @@ if command -v docker >/dev/null 2>&1; then
         | grep -E "^(Server Version|Operating System|Total Memory|CPUs|Storage Driver|Docker Root Dir|Kernel Version|Architecture|OSType):" \
         | sed 's/^/    /' || echo "    (could not get docker info — daemon may not be running)"
     echo ""
-    echo "  Daemon config (/etc/docker/daemon.json):"
+    echo "  Daemon config (/etc/docker/daemon.json) — non-sensitive fields only:"
     if [ -f /etc/docker/daemon.json ]; then
-        cat /etc/docker/daemon.json | sed 's/^/    /'
+        # G10-04A-FIX-01: do NOT print the full daemon.json. It may contain
+        # private registry mirrors, insecure-registries with internal hostnames,
+        # live-restore settings tied to a private etcd endpoint, or other
+        # sensitive values. Extract ONLY the fields relevant to STR staging:
+        #   - log-driver, log-opts (max-size, max-file)
+        #   - storage-driver
+        #   - dns, bip (networking — useful for compose network planning)
+        #   - live-restore, iptables, userland-proxy, default-runtime
+        #   - Whether the file exists at all (so MASTER knows it needs creating)
+        # All other fields are reported as "(present, value redacted)".
+        if command -v python3 >/dev/null 2>&1; then
+            # Use python3 to parse JSON properly. Read the file directly inside
+            # python (not via stdin redirect — heredoc already occupies stdin).
+            python3 -c '
+import json
+ALLOWED = {
+    "log-driver", "log-opts", "storage-driver", "dns", "bip",
+    "live-restore", "iptables", "userland-proxy", "default-runtime",
+}
+try:
+    with open("/etc/docker/daemon.json") as f:
+        cfg = json.load(f)
+except Exception as e:
+    print("    (file exists but could not be parsed as JSON: %s)" % e)
+    raise SystemExit(0)
+for key in sorted(cfg.keys()):
+    if key in ALLOWED:
+        print("    %s: %s" % (key, json.dumps(cfg[key])))
+    else:
+        print("    %s: (present, value redacted)" % key)
+'
+        else
+            # Fallback if python3 is not available: grep for known-safe keys only
+            grep -E '^\s*"(log-driver|log-opts|storage-driver|dns|bip|live-restore|iptables|userland-proxy|default-runtime)' /etc/docker/daemon.json 2>/dev/null | sed 's/^/    /' || echo "    (no recognized safe fields; file may contain custom config — review manually)"
+            echo "    (other fields redacted; install python3 for a full filtered view)"
+        fi
     else
         echo "    (no /etc/docker/daemon.json — default log driver, no log rotation configured)"
     fi
@@ -192,11 +252,27 @@ echo ""
 # -------- 6. Port usage and firewall --------
 echo "## 6. Port Usage and Firewall"
 echo ""
+# G10-04A-FIX-01: ss -tlnp prints process names + command-line arguments
+# (visible to root only, but may include paths like /opt/str/staging which
+# reveal install paths). By default, omit the -p flag so only port + address
+# are shown. MASTER can opt in via STR_REVEAL_PROCESS_NAMES=1.
 echo "Listening ports (TCP):"
 if command -v ss >/dev/null 2>&1; then
-    ss -tlnp 2>/dev/null | head -30 | sed 's/^/  /' || echo "  (could not list via ss)"
+    if [ "$REVEAL_PROCESS_NAMES" = "1" ]; then
+        echo "  (process names shown via STR_REVEAL_PROCESS_NAMES=1)"
+        ss -tlnp 2>/dev/null | head -30 | sed 's/^/  /' || echo "  (could not list via ss)"
+    else
+        # Omit -p flag: only show address:port, not the process binding it.
+        ss -tln 2>/dev/null | head -30 | sed 's/^/  /' || echo "  (could not list via ss)"
+        echo "  (process names redacted — re-run with STR_REVEAL_PROCESS_NAMES=1 to include them)"
+    fi
 elif command -v netstat >/dev/null 2>&1; then
-    netstat -tlnp 2>/dev/null | head -30 | sed 's/^/  /' || echo "  (could not list via netstat)"
+    if [ "$REVEAL_PROCESS_NAMES" = "1" ]; then
+        netstat -tlnp 2>/dev/null | head -30 | sed 's/^/  /' || echo "  (could not list via netstat)"
+    else
+        netstat -tln 2>/dev/null | head -30 | sed 's/^/  /' || echo "  (could not list via netstat)"
+        echo "  (process names redacted — re-run with STR_REVEAL_PROCESS_NAMES=1 to include them)"
+    fi
 else
     echo "  (no ss or netstat available)"
 fi
@@ -250,27 +326,47 @@ echo ""
 # -------- 8. Existing backup infrastructure --------
 echo "## 8. Existing Backup Infrastructure"
 echo ""
-echo "System cron (root):"
+# G10-04A-FIX-01: do NOT print full cron command lines. They may contain
+# sensitive paths (e.g., /home/user/.aws/credentials), rsync targets with
+# internal hostnames, or database URLs with passwords. Report only:
+#   - Number of non-comment, non-empty entries per cron source
+#   - Presence of common backup-related binaries
+#   - Whether the system appears to have any backup schedule at all
+echo "Cron entries (counts only — full command lines are NOT printed):"
 if [ -f /etc/crontab ]; then
-    grep -v '^#' /etc/crontab 2>/dev/null | grep -v '^$' | sed 's/^/  /' || echo "  (empty)"
+    CRON_COUNT=$(grep -v '^#' /etc/crontab 2>/dev/null | grep -cv '^$')
+    echo "  /etc/crontab: $CRON_COUNT non-comment entries"
 else
-    echo "  (no /etc/crontab)"
+    echo "  /etc/crontab: (no /etc/crontab file)"
 fi
 echo ""
-echo "Cron directories:"
-for d in /var/spool/cron/crontabs /var/spool/cron /etc/cron.d /etc/cron.daily /etc/cron.hourly; do
+echo "  Per-directory cron source counts:"
+for d in /var/spool/cron/crontabs /var/spool/cron /etc/cron.d /etc/cron.daily /etc/cron.hourly /etc/cron.weekly /etc/cron.monthly; do
     if [ -d "$d" ]; then
-        echo "  $d:"
-        ls -la "$d" 2>/dev/null | sed 's/^/    /'
+        # Count non-empty, non-comment files (avoid printing filenames too —
+        # filenames in /var/spool/cron/crontabs reveal usernames).
+        # Only report the count of files in the directory.
+        FILE_COUNT=$(find "$d" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$FILE_COUNT" -gt 0 ]; then
+            echo "    $d: $FILE_COUNT files (contents redacted)"
+        else
+            echo "    $d: empty"
+        fi
     fi
 done
 echo ""
-echo "Backup-related binaries available:"
+echo "Backup-related binaries available (presence only — no version probe to avoid args leakage):"
+BACKUP_TOOLS_FOUND=0
 for cmd in restic borg duplicity rsync pgbackrest pg_dump aws rclone; do
     if command -v $cmd >/dev/null 2>&1; then
-        echo "  AVAILABLE: $cmd ($($cmd --version 2>&1 | head -1))"
+        # Only report presence — don't run --version (some tools print args/config paths).
+        echo "  AVAILABLE: $cmd (path: $(command -v $cmd))"
+        BACKUP_TOOLS_FOUND=$((BACKUP_TOOLS_FOUND + 1))
     fi
 done
+if [ "$BACKUP_TOOLS_FOUND" -eq 0 ]; then
+    echo "  (no common backup binaries found — manual rsync or pg_dump from Docker will be the baseline)"
+fi
 echo ""
 
 # -------- 9. Existing STR Platform installations --------
@@ -278,6 +374,7 @@ echo "## 9. Existing STR Platform Installations"
 echo ""
 echo "Searching for STR-related directories:"
 for d in /opt/str /srv/str /var/lib/str /home/*/str /home/*/str-platform /home/*/SyrianTechRenaissance-Platform; do
+    # shellcheck disable=SC2086 # intentional globbing on /home/* patterns
     if ls -d $d 2>/dev/null; then
         echo "  found: $d"
     fi
@@ -297,10 +394,32 @@ echo ""
 # -------- 10. Public IP and connectivity --------
 echo "## 10. Public IP and Network"
 echo ""
-echo "Public IP (via ifconfig.me, 5s timeout):"
-PUBLIC_IP=$(curl -s --max-time 5 https://ifconfig.me 2>/dev/null || echo "(unavailable)")
-echo "  $PUBLIC_IP"
+# G10-04A-FIX-01: do NOT print the full public IP by default. MASTER can
+# opt in to the full IP via STR_REVEAL_PUBLIC_IP=1 if needed. The masked
+# form (e.g., "203.0.x.x") is enough to identify the network class for
+# deployment planning.
+PUBLIC_IP=$(curl -s --max-time 5 https://ifconfig.me 2>/dev/null || echo "")
+if [ -z "$PUBLIC_IP" ]; then
+    echo "  Public IP: (unavailable — outbound HTTPS to ifconfig.me failed)"
+else
+    if [ "$REVEAL_PUBLIC_IP" = "1" ]; then
+        echo "  Public IP (revealed via STR_REVEAL_PUBLIC_IP=1): $PUBLIC_IP"
+    else
+        # Mask all but the first two octets (for IPv4) or the first two groups (for IPv6).
+        # This identifies the network class without revealing the host.
+        if echo "$PUBLIC_IP" | grep -q ':'; then
+            # IPv6 — show first two groups only
+            MASKED=$(echo "$PUBLIC_IP" | awk -F: '{print $1":"$2":x:x:x:x:x:x"}')
+        else
+            # IPv4 — show first two octets only
+            MASKED=$(echo "$PUBLIC_IP" | awk -F. '{print $1"."$2".x.x"}')
+        fi
+        echo "  Public IP (masked): $MASKED"
+        echo "  (To reveal the full IP, re-run with STR_REVEAL_PUBLIC_IP=1)"
+    fi
+fi
 echo ""
+# Connectivity checks — these do NOT reveal IPs, only yes/no reachability.
 echo "Outbound HTTPS to github.com (5s timeout):"
 if curl -sI --max-time 5 https://github.com >/dev/null 2>&1; then
     echo "  OK"
@@ -356,16 +475,65 @@ echo "DISCOVERY COMPLETE"
 echo "============================================================"
 echo "Report saved to: $OUTPUT_FILE"
 echo ""
-echo "REDACTION CHECKLIST before sharing with GLM:"
-echo "  - The report does NOT include passwords, tokens, or private keys."
-echo "  - Review for any private IPs, hostnames, or emails you do not want to share."
-echo "  - Cron jobs may include command lines — review for sensitive paths or args."
-echo "  - Safe to share: OS, architecture, CPU/RAM/disk, Docker version,"
-echo "    port usage, firewall status, proxy inventory."
+echo "============================================================"
+echo "REDACTION CHECKLIST — REVIEW BEFORE SHARING WITH GLM"
+echo "============================================================"
 echo ""
-echo "To view the report:"
+echo "WHAT THE SCRIPT HAS ALREADY REDACTED FOR YOU:"
+echo "  - /etc/docker/daemon.json: only log-driver, log-opts, storage-driver,"
+echo "    dns, bip, live-restore, iptables, userland-proxy, default-runtime."
+echo "    All other fields show as '(present, value redacted)'."
+echo "  - Cron: only ENTRY COUNTS are reported. Command lines and filenames"
+echo "    are NOT printed (filenames in /var/spool/cron reveal usernames)."
+echo "  - Public IP: masked to first-two-octets (e.g., 203.0.x.x)."
+echo "  - Listening sockets: process names redacted by default."
+echo "  - Backup tool versions: not probed (only presence + path)."
+echo ""
+echo "STILL REVIEW MANUALLY BEFORE SHARING:"
+echo "  1. Hostname (line 3 of the report) — may include a private"
+echo "     project name. Redact if sensitive."
+echo "  2. uname -a output — kernel version is generally safe, but"
+echo "     review for any custom kernel build names."
+echo "  3. /etc/os-release — generally safe, but review."
+echo "  4. Docker container names + image names — these reveal what"
+echo "     other apps run on the server. Redact if you prefer not to"
+echo "     share this with GLM."
+echo "  5. Docker network + volume names — same as above."
+echo "  6. ss -tln output (without -p) — addresses may include internal"
+echo "     IPs like 10.x.x.x or 192.168.x.x. Redact if you do not want"
+echo "     GLM to know your internal subnet."
+echo "  7. Firewall rules (ufw status, iptables -L) — may include"
+echo "     source IP allowlists (e.g., 'allow from 203.0.113.5')."
+echo "     Redact any source IPs you do not want to share."
+echo "  8. Caddyfile / nginx sites-enabled paths — generally safe."
+echo "  9. systemctl status output (first 5 lines per service) —"
+echo "     may include active-since timestamps and load numbers."
+echo "     Generally safe but review."
+echo ""
+echo "OPT-IN FIELDS (off by default):"
+echo "  - STR_REVEAL_PUBLIC_IP=1     reveals the full public IP"
+echo "  - STR_REVEAL_PROCESS_NAMES=1 reveals process names in ss output"
+echo ""
+echo "WHAT IS ALWAYS SAFE TO SHARE (no review needed):"
+echo "  - OS name + version (NAME=, VERSION_ID=)"
+echo "  - Architecture (uname -m, dpkg --print-architecture)"
+echo "  - CPU count + model name"
+echo "  - RAM size + swap size"
+echo "  - Disk size + filesystem type"
+echo "  - Docker Engine + Compose versions"
+echo "  - Docker daemon log rotation config (log-driver, log-opts)"
+echo "  - Port availability (free / in use) for 22/80/81/443/3000/5432/etc"
+echo "  - Reverse proxy presence (Caddy / NPM / Nginx / Traefik)"
+echo "  - Time + timezone"
+echo "  - Ulimits (ulimit -n, ulimit -u)"
+echo "  - Outbound HTTPS reachability (yes/no, no IPs)"
+echo ""
+echo "TO VIEW THE REPORT:"
 echo "  cat $OUTPUT_FILE"
 echo ""
-echo "To share with GLM:"
+echo "TO SHARE WITH GLM:"
 echo "  Paste the file contents into the chat, OR"
 echo "  Attach the file if the chat interface supports it."
+echo ""
+echo "TO RUN WITH OPT-INS:"
+echo "  STR_REVEAL_PUBLIC_IP=1 STR_REVEAL_PROCESS_NAMES=1 bash docs/operations/server-discovery.sh"
