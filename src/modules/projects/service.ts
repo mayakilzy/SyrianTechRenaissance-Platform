@@ -32,6 +32,7 @@ import {
   ForbiddenError,
   UnprocessableEntityError,
 } from "@/lib/errors";
+import { assertActiveUser, isActiveUser } from "@/lib/auth-checks";
 import { z } from "zod/v4";
 import { notify } from "@/modules/notifications/service";
 import { Prisma } from "@prisma/client";
@@ -88,6 +89,11 @@ export async function loadProjectContext(
   isMember: boolean;
   isAdmin: boolean;
 } | null> {
+  // G11-00A FIX: fail-closed on suspended users. Without this, a SUSPENDED
+  // lead/steward/admin (with a still-valid session cookie) could pass the
+  // role checks below and perform privileged project operations.
+  if (!(await isActiveUser(userId))) return null;
+
   const project = await db.project.findUnique({
     where: { id: projectId },
     include: {

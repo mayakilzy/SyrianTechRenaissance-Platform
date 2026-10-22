@@ -34,6 +34,7 @@ import {
   ConflictError,
   ForbiddenError,
 } from "@/lib/errors";
+import { assertActiveUser } from "@/lib/auth-checks";
 import { z } from "zod/v4";
 import { Prisma } from "@prisma/client";
 import { notify } from "@/modules/notifications/service";
@@ -85,6 +86,9 @@ export async function fileComplaint(
   complainantId: string,
   input: ComplaintCreateInput,
 ) {
+  // G11-00A: fail-closed on suspended complainant.
+  await assertActiveUser(complainantId);
+
   const valid = complaintCreateSchema.safeParse(input);
   if (!valid.success) {
     const fields: Record<string, string[]> = {};

@@ -18,6 +18,7 @@ import {
   ConflictError,
   ForbiddenError,
 } from "@/lib/errors";
+import { assertActiveUser } from "@/lib/auth-checks";
 
 // ---------------------------------------------------------------------------
 // Authorization helper (G03-FIX §3): INSIDE the service
@@ -26,8 +27,16 @@ import {
 /**
  * Verify the actor is the project's steward OR a global admin.
  * Throws ForbiddenError if not. Called INSIDE suspend/reactivate.
+ *
+ * G11-00A FIX: also verify the actor's account is ACTIVE. A SUSPENDED
+ * steward/admin (with a still-valid session cookie) must NOT be able to
+ * govern projects. This closes FOLLOW-UP-1 from the G11-00 defect
+ * register.
  */
 async function assertCanGovernProject(projectId: string, actorId: string): Promise<void> {
+  // G11-00A: fail-closed on suspended accounts.
+  await assertActiveUser(actorId);
+
   // G09 FIX: include team memberships in the lookup so we can distinguish
   // "participant but not governor" (Forbidden — they know it exists) from
   // "non-participant" (NotFound — don't leak existence per G03/G04/G05
@@ -75,6 +84,9 @@ export interface InviteInput {
 }
 
 export async function inviteMember(input: InviteInput) {
+  // G11-00A: fail-closed on suspended inviter.
+  await assertActiveUser(input.inviterId);
+
   const team = await db.team.findUnique({
     where: { id: input.teamId },
     include: { project: true, memberships: true },
@@ -207,6 +219,9 @@ export interface ChangeStewardInput {
  * The new steward must be qualified (admin or steward role).
  */
 export async function changeSteward(input: ChangeStewardInput): Promise<void> {
+  // G11-00A: fail-closed on suspended actor.
+  await assertActiveUser(input.actorId);
+
   // Only admins can reassign stewards.
   const adminGrant = await db.roleGrant.findFirst({
     where: { userId: input.actorId, role: "admin", scope: "global", revokedAt: null },
@@ -267,6 +282,9 @@ export interface ChangeLeadInput {
  * The new lead must be a current team member.
  */
 export async function changeLead(input: ChangeLeadInput): Promise<void> {
+  // G11-00A: fail-closed on suspended actor.
+  await assertActiveUser(input.actorId);
+
   const project = await db.project.findUnique({
     where: { id: input.projectId },
     include: { team: { include: { memberships: true } } },
