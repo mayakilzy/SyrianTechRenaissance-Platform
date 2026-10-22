@@ -615,13 +615,38 @@
 }
 .str-shell .str-empty svg { width: 32px; height: 32px; margin: 0 auto 10px; display: block; color: #2a5a8e; }
 
-/* ===== LTR (English) overrides ===== */
+/* ===== LTR (English) overrides =====
+ * STR-UI-02A CORRECTION: hero castle moves to FAR RIGHT in EN per approved bilingual reference.
+ * Previous v1.0 used transform: scaleX(-1) — this MIRRORED the entire hero image.
+ * Per MASTER's directive §4: "Do not horizontally flip the photograph or the entire hero."
+ * Fix: keep the image un-flipped, but change background-position to push the castle
+ * focal point to the FAR RIGHT of the hero area. Use background-position: 100% 60%
+ * instead of scaleX(-1) on the LTR rule.
+ */
 html[dir="ltr"] .str-shell { font-family: var(--font-ibm-plex, 'IBM Plex Sans', sans-serif); }
 html[dir="ltr"] .str-shell .str-hero-copy { text-align: left; }
-html[dir="ltr"] .str-shell .str-hero-image { transform: scaleX(-1); }
+/* REMOVED: html[dir="ltr"] .str-shell .str-hero-image { transform: scaleX(-1); } */
+/* ADDED: castle/sunset focal point moved to FAR RIGHT in EN, no horizontal flip */
+html[dir="ltr"] .str-shell .str-hero-image {
+  background-position: center, 100% 60%;
+  background-size: cover, 65% auto;
+}
 html[dir="ltr"] .str-shell .str-tags { justify-content: flex-start; }
 html[dir="ltr"] .str-shell .str-hero h1 { letter-spacing: 0; }
 html[dir="ltr"] .str-shell .str-sidebar-promo .str-promo-copy { font-family: var(--font-ibm-plex, 'IBM Plex Sans', sans-serif); }
+
+/* STR-UI-02A CORRECTION: footer color per approved bilingual reference.
+ * AR footer: blue tint, EN footer: green tint.
+ * Default (RTL Arabic): blue gradient border-top.
+ */
+.str-shell .str-footer {
+  border-top: 1px solid #0e4780;
+  background: linear-gradient(90deg, transparent, rgba(10,32,66,0.4), transparent);
+}
+html[dir="ltr"] .str-shell .str-footer {
+  border-top: 1px solid #169966;
+  background: linear-gradient(90deg, transparent, rgba(13,80,60,0.4), transparent);
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 1250px) {
