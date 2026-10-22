@@ -1,13 +1,12 @@
 import { getServerSession } from "next-auth";
 import { setRequestLocale, getTranslations } from "next-intl/server";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   Users, Zap, FileText, Bookmark, UsersRound,
   Search, Target, Box, BarChart3,
   Star, Bell, MessageCircle,
   Folder, BriefcaseBusiness, Sparkles, Layers,
-  BookOpen, Network as NetworkIcon,
+  BookOpen, Network as NetworkIcon, ShieldCheck, Loader2,
 } from "lucide-react";
 import { AppShell } from "@/components/shell/app-shell";
 import { getAuthOptions } from "@/modules/identity/auth-config";
@@ -30,11 +29,35 @@ export default async function DashboardPage({
   const loc = locale as Locale;
   setRequestLocale(loc);
   const t = await getTranslations({ locale: loc, namespace: "dashboard" });
+  const tAuth = await getTranslations({ locale: loc, namespace: "auth" });
 
   // ─── Auth check ─────────────────────────────────────────────────────────────
+  // STR-UI-02A FIX: restore v1.0 behavior — render a signin Card for unauthenticated
+  // users (NO redirect). This preserves the g09 E2E test contract: "unauthenticated
+  // user accessing /en/dashboard sees signin prompt (no redirect)".
+  // The Card is NOT wrapped in AppShell (unauthenticated users see a clean prompt,
+  // not the full dashboard shell with empty data).
   const session = await getServerSession(getAuthOptions());
   if (!session?.user?.id) {
-    redirect(loc === "ar" ? "/auth/signin" : `/${loc}/auth/signin`);
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4"
+        dir={loc === "ar" ? "rtl" : "ltr"}
+      >
+        <div className="max-w-md w-full rounded-xl border border-border bg-card p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <h1 className="text-xl font-semibold mb-2">{tAuth("dashboardTitle")}</h1>
+          <p className="text-sm text-muted-foreground mb-6">{tAuth("dashboardWelcome")}</p>
+          <Link
+            href={loc === "ar" ? "/auth/signin" : `/${loc}/auth/signin`}
+            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-6 py-3 font-medium hover:bg-primary/90 transition-colors"
+          >
+            {tAuth("signinButton")}
+          </Link>
+        </div>
+      </div>
+    );
   }
   const userId = session.user.id;
   const user = await db.user.findUnique({
@@ -430,7 +453,7 @@ export default async function DashboardPage({
 
       {/* ─── Footer ──────────────────────────────────────────────────────────── */}
       <footer className="str-footer">
-        <span>Syrian Tech Renaissance · Dashboard</span>
+        <span>Syrian Tech Renaissance · Platform</span>
         <span>{t("footer.demoNotice")}</span>
       </footer>
     </AppShell>
