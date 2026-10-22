@@ -60,6 +60,17 @@ export type CharterRevisionInput = z.infer<typeof charterRevisionSchema>;
  * so even if a future caller forgets the check, the service blocks it.
  */
 async function isInstitutionalReviewer(userId: string): Promise<boolean> {
+  // G11-00 SECURITY FIX: A SUSPENDED user with a still-valid role grant must
+  // NOT be allowed to act as a reviewer. The original check only looked at
+  // the role grant itself (revokedAt: null), not the user's account status.
+  // This blocks the path where: admin suspends a user mid-session → the
+  // session cookie is still valid → the user calls reviewProposal.
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, status: true },
+  });
+  if (!user || user.status !== "ACTIVE") return false;
+
   const grant = await db.roleGrant.findFirst({
     where: {
       userId,
@@ -83,6 +94,14 @@ async function isInstitutionalReviewer(userId: string): Promise<boolean> {
  * The reviewer must STILL pass this check for the steward they nominate.
  */
 async function isQualifiedSteward(userId: string): Promise<boolean> {
+  // G11-00 SECURITY FIX: Same pattern as isInstitutionalReviewer — a SUSPENDED
+  // user must not act as a steward, regardless of role grants.
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, status: true },
+  });
+  if (!user || user.status !== "ACTIVE") return false;
+
   const grant = await db.roleGrant.findFirst({
     where: {
       userId,
@@ -107,6 +126,20 @@ export interface CreateProposalInput {
 }
 
 export async function createProposal(input: CreateProposalInput) {
+  // G11-00 SECURITY FIX: Verify the submitter is an ACTIVE user before allowing
+  // proposal creation. Without this check, a SUSPENDED user with a still-valid
+  // session cookie (suspended between login and session expiry) could create
+  // proposals via direct service-layer calls or HTTP.
+  // The check is placed at the SERVICE layer (not just HTTP) so any caller is
+  // protected — this is defense-in-depth on top of the HTTP-layer auth check.
+  const submitter = await db.user.findUnique({
+    where: { id: input.submitterId },
+    select: { id: true, status: true },
+  });
+  if (!submitter || submitter.status !== "ACTIVE") {
+    throw new ForbiddenError("Account is not active; cannot create proposals");
+  }
+
   const valid = charterRevisionSchema.safeParse(input.charter);
   if (!valid.success) {
     const fields: Record<string, string[]> = {};

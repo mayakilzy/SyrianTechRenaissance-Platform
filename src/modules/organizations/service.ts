@@ -28,6 +28,7 @@ import {
   ForbiddenError,
   UnprocessableEntityError,
 } from "@/lib/errors";
+import { isActiveUser } from "@/lib/auth-checks";
 import { z } from "zod/v4";
 import { Prisma } from "@prisma/client";
 
@@ -56,8 +57,13 @@ export type RepresentativeAddInput = z.infer<typeof representativeAddSchema>;
 
 /**
  * Check if user is a global admin.
+ *
+ * G11-00A FIX: also verify the user's account is ACTIVE. A SUSPENDED admin
+ * (with a still-valid session cookie) must NOT pass this check. This closes
+ * FOLLOW-UP-1 from the G11-00 defect register.
  */
 export async function isAdmin(userId: string): Promise<boolean> {
+  if (!(await isActiveUser(userId))) return false;
   const grant = await db.roleGrant.findFirst({
     where: { userId, role: "admin", scope: "global", revokedAt: null },
   });
@@ -66,8 +72,11 @@ export async function isAdmin(userId: string): Promise<boolean> {
 
 /**
  * Check if user is a partnership_manager (new G06 role).
+ *
+ * G11-00A FIX: same active-user guard.
  */
 export async function isPartnershipManager(userId: string): Promise<boolean> {
+  if (!(await isActiveUser(userId))) return false;
   const grant = await db.roleGrant.findFirst({
     where: { userId, role: "partnership_manager", scope: "global", revokedAt: null },
   });
@@ -76,8 +85,11 @@ export async function isPartnershipManager(userId: string): Promise<boolean> {
 
 /**
  * Check if user is a moderator (new G06 role).
+ *
+ * G11-00A FIX: same active-user guard.
  */
 export async function isModerator(userId: string): Promise<boolean> {
+  if (!(await isActiveUser(userId))) return false;
   const grant = await db.roleGrant.findFirst({
     where: { userId, role: "moderator", scope: "global", revokedAt: null },
   });
