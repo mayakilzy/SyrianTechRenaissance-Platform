@@ -658,5 +658,60 @@
       "collaborative": "Collaborative",
       "volunteer": "Volunteer"
     }
+  },
+  "profile": {
+    "brand": "Syrian Tech Renaissance",
+    "brandTag": "A Tech-Powered Syria",
+    "globalSearch": "Search for jobs, skills, companies, people...",
+    "welcome": "Welcome",
+    "account": "Platform User",
+    "promo": "Together We Build a Tech-Powered Syria",
+    "promoSub": "A better future through engineering",
+    "edit": "Edit Profile +",
+    "public": "View Public Profile",
+    "quote": "Technology is a bridge to stronger communities and a brighter Syria",
+    "completion": "Profile Completeness",
+    "aboutTitle": "About Me",
+    "skillsTitle": "Skills & Expertise",
+    "experienceTitle": "Experience",
+    "projectsTitle": "Featured Projects",
+    "viewAll": "View All →",
+    "additionalTitle": "Additional Information",
+    "languages": "Languages",
+    "availability": "Availability",
+    "privacyTitle": "Privacy Settings",
+    "managePrivacy": "Manage Privacy",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "changeLanguage": "Change language",
+    "notifications": "Notifications",
+    "demoNotifications": "Notifications are demo data",
+    "demoSearch": "Demo search",
+    "darkModeIsReference": "Dark mode is the approved design",
+    "nav": {
+      "dashboard": "Dashboard",
+      "myProjects": "My Projects",
+      "opportunities": "Job Opportunities",
+      "profile": "Professional Profile",
+      "talent": "Talent Directory",
+      "partnerships": "Partnerships",
+      "events": "Events",
+      "tools": "Tools & Resources",
+      "settings": "Settings"
+    },
+    "stats": {
+      "completedProjects": "Completed Projects",
+      "contributions": "Technical Contributions",
+      "skills": "Skills & Expertise",
+      "connections": "Professional Connections",
+      "mentorshipHours": "Mentorship Hours",
+      "completedTasks": "Completed Tasks"
+    },
+    "checklist": {
+      "basic": "Basic Information",
+      "skills": "Skills & Expertise",
+      "projects": "Projects",
+      "contact": "Contact Links"
+    }
   }
 }

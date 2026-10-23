@@ -658,5 +658,60 @@
       "collaborative": "مشروع تعاوني",
       "volunteer": "تطوعي"
     }
+  },
+  "profile": {
+    "brand": "نهضة سوريا التقنية",
+    "brandTag": "منصة تجمع العقول لبناء مستقبل سوريا",
+    "globalSearch": "ابحث عن وظائف، مهارات، شركات، مواهب...",
+    "welcome": "أهلاً وسهلاً",
+    "account": "مستخدم المنصة",
+    "promo": "معاً نبني مستقبلاً تقنياً لسوريا",
+    "promoSub": "Together We Build",
+    "edit": "تعديل الملف",
+    "public": "عرض الملف العام",
+    "quote": "التقنية وسيلة لبناء مجتمع أقوى وسوريا أجمل",
+    "completion": "اكتمال الملف المهني",
+    "aboutTitle": "نبذة عني",
+    "skillsTitle": "المهارات والخبرات",
+    "experienceTitle": "الخبرة العملية",
+    "projectsTitle": "أبرز المشاريع",
+    "viewAll": "عرض الكل ←",
+    "additionalTitle": "معلومات إضافية",
+    "languages": "اللغات",
+    "availability": "التوفر",
+    "privacyTitle": "إعدادات الخصوصية",
+    "managePrivacy": "إدارة الخصوصية",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية",
+    "demoSearch": "البحث التجريبي",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد",
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "opportunities": "فرص العمل",
+      "profile": "الملف المهني",
+      "talent": "دليل المواهب",
+      "partnerships": "الشراكات",
+      "events": "الفعاليات",
+      "tools": "الأدوات والموارد",
+      "settings": "الإعدادات"
+    },
+    "stats": {
+      "completedProjects": "مشروع مكتمل",
+      "contributions": "مساهمة تقنية",
+      "skills": "مهارة وخبرة",
+      "connections": "علاقة مهنية",
+      "mentorshipHours": "ساعة إرشاد",
+      "completedTasks": "مهمة منجزة"
+    },
+    "checklist": {
+      "basic": "المعلومات الأساسية",
+      "skills": "المهارات والخبرات",
+      "projects": "المشاريع",
+      "contact": "روابط التواصل"
+    }
   }
 }
