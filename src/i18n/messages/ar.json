@@ -351,5 +351,367 @@
     "engineering": "منظومة الهندسة",
     "academyNote": "قسم الأكاديمية قادم لاحقاً",
     "engineeringNote": "منظومة الهندسة قادمة لاحقاً"
+  },
+  "dashboard": {
+    "nav": {
+      "aria": "التنقل الرئيسي",
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "workOpportunities": "فرص العمل",
+      "projects": "المشاريع",
+      "engineers": "المهندسون",
+      "community": "المجتمع",
+      "learning": "التعلم والتطوير",
+      "events": "الفعاليات",
+      "messages": "الرسائل",
+      "settings": "الإعدادات"
+    },
+    "workspace": {
+      "label": "مساحات العمل",
+      "personalProjects": "مشاريعي الشخصية",
+      "team": "فريق العمل",
+      "favorites": "المشاريع المفضلة",
+      "organizations": "المنظمات"
+    },
+    "heritage": {
+      "alt": "آثار سورية",
+      "title": "معاً نبني مستقبل سوريا التقني",
+      "cta": "انضم إلى المجتمع ←"
+    },
+    "brandAr": "نهضة سوريا التقنية",
+    "search": "ابحث عن مشاريع، مهندسين، فرص، تقنيات ...",
+    "themeToggle": "تبديل السمة",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد لهذه الصفحة",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية — تنتظر ربط API",
+    "demoSearch": "البحث التجريبي يحتاج ربط API",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "welcomeSmall": "أهلاً وسهلاً",
+    "userName": "مستخدم المنصة",
+    "avatarInitial": "م",
+    "hero": {
+      "subtitle": "معاً نبني مستقبل سوريا بالتقنية والمعرفة",
+      "quote": "«كل فكرة اليوم ... يمكن أن تصنع غداً أفضل لسوريا»",
+      "newProject": "إنشاء مشروع جديد",
+      "explore": "استكشف الفرص",
+      "newProjectToast": "إنشاء المشروع يحتاج ربطه بمسار التطبيق الحقيقي",
+      "hologram": "Build · Collaborate\nLearn · Grow",
+      "titlePrefix": "مرحباً بك مجدداً يا"
+    },
+    "stats": {
+      "aria": "إحصاءات الحساب",
+      "newConnections": "تواصل جديد",
+      "contributions": "مساهمات هذا الشهر",
+      "proposalsReview": "مقترحات قيد التقييم",
+      "savedOpportunities": "فرص مهتم بها",
+      "activeProjects": "مشاريعي النشطة"
+    },
+    "common": {
+      "viewAll": "عرض الكل",
+      "save": "حفظ",
+      "saved": "محفوظ",
+      "connect": "تواصل"
+    },
+    "learning": {
+      "title": "رحلة تطورك التقني",
+      "advancedLevel": "مستوى متقدم",
+      "completeJourney": "أكمل رحلتك التعليمية",
+      "prompt": "استمر في تطوير مهاراتك للوصول إلى المستوى التالي",
+      "ai": "الذكاء الاصطناعي",
+      "ux": "تصميم تجربة المستخدم",
+      "databases": "قواعد البيانات",
+      "empty": "لم تُربط رحلة التعلم بعد — اربط مهاراتك في ملفك الشخصي لمتابعة تقدمك"
+    },
+    "opportunities": {
+      "title": "فرص مخصصة لك",
+      "remote": "عن بُعد",
+      "empty": "لا توجد فرص متاحة حالياً — تحقق لاحقاً أو استكشف جميع الفرص"
+    },
+    "projects": {
+      "title": "مشاريعي الحالية",
+      "empty": "لا توجد مشاريع نشطة حالياً — ابدأ بإنشاء مقترح جديد",
+      "status": {
+        "inDevelopment": "قيد التطوير",
+        "review": "مراجعة",
+        "completed": "مكتمل"
+      }
+    },
+    "featured": {
+      "title": "مشاريع مميزة من المجتمع",
+      "aiEducation": "تعليم · تقني",
+      "greenTech": "تقنيات خضراء",
+      "desc": "مشروع مجتمعي نشط — تفاصيل من مشروع فعلي",
+      "empty": "لا توجد مشاريع مجتمعية مميزة حالياً"
+    },
+    "engineers": {
+      "title": "المهندسون المقترحون لك",
+      "empty": "لا يوجد مهندسون مقترحون حالياً",
+      "connectToast": "زر تجريبي — يربط المطور هذا الإجراء بالواجهة البرمجية"
+    },
+    "activity": {
+      "title": "أحدث الأنشطة",
+      "empty": "لا يوجد نشاط حديث"
+    },
+    "footer": {
+      "demoNotice": "بيانات حقيقية من المنصة — الأرقام التجريبية موسومة بوضوح"
+    }
+  },
+  "myProjects": {
+    "title": "مشاريعي",
+    "brandSub": "نهضة سوريا التقنية",
+    "welcome": "أهلاً وسهلاً",
+    "user": "مستخدم المنصة",
+    "avatarInitial": "م",
+    "globalSearch": "ابحث عن مشاريع، مهندسين، فرص...",
+    "themeToggle": "تبديل السمة",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية — تنتظر ربط API",
+    "demoSearch": "البحث التجريبي يحتاج ربط API",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "heroSubtitle": "مشاريعي ومساهماتي في بناء مستقبل سوريا",
+    "heroDescription": "إدارة مشاريعك، متابعة التقدم، التعاون مع الفريق، وتحقيق الأهداف معاً.",
+    "create": "إنشاء مشروع جديد",
+    "explore": "استكشاف فرص العمل",
+    "holoTitle": "معاً نبني سوريا تقنية مستقرة ومتقدمة",
+    "statsAria": "إحصاءات المشاريع",
+    "filtersAria": "فلاتر المشاريع",
+    "projectSearch": "ابحث في مشاريعي...",
+    "sortLabel": "الترتيب",
+    "typeLabel": "نوع المشروع",
+    "statusLabel": "الحالة",
+    "resetFilters": "إعادة تعيين الفلاتر",
+    "gridView": "عرض شبكي",
+    "listView": "عرض قائمة",
+    "updated": "آخر تحديث",
+    "tasks": "مهام مفتوحة",
+    "members": "أعضاء",
+    "details": "عرض التفاصيل ←",
+    "noResults": "لا توجد مشاريع مطابقة للفلاتر.",
+    "demoNotice": "بيانات حقيقية من المنصة — المشاريع والمساهمات الفعلية",
+    "nav": {
+      "aria": "التنقل الرئيسي",
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "workOpportunities": "فرص العمل",
+      "projects": "المشاريع",
+      "engineers": "المهندسون",
+      "community": "المجتمع",
+      "learning": "التعلم والتطوير",
+      "events": "الفعاليات",
+      "messages": "الرسائل",
+      "settings": "الإعدادات"
+    },
+    "workspace": {
+      "label": "مساحات العمل",
+      "personalProjects": "مشاريعي الشخصية",
+      "team": "فريق العمل",
+      "favorites": "المشاريع المفضلة",
+      "organizations": "المنظمات"
+    },
+    "promo": {
+      "title": "معاً نبني مستقبل سوريا التقني",
+      "join": "انضم إلى المجتمع ←",
+      "joinToast": "زر تجريبي — يربط بمسار المجتمع الحقيقي"
+    },
+    "stats": {
+      "total": "إجمالي مشاريعي",
+      "active": "قيد التنفيذ",
+      "completed": "مكتملة",
+      "hold": "متوقفة مؤقتاً",
+      "members": "إجمالي أعضاء الفرق",
+      "contributions": "إجمالي مساهماتي"
+    },
+    "tabs": {
+      "all": "الكل",
+      "active": "قيد التنفيذ",
+      "completed": "مكتملة",
+      "hold": "متوقفة",
+      "draft": "مقترحات"
+    },
+    "status": {
+      "all": "الكل",
+      "active": "قيد التنفيذ",
+      "completed": "مكتملة",
+      "hold": "متوقفة مؤقتاً",
+      "draft": "مقترحات"
+    },
+    "sorts": {
+      "recent": "الأحدث أولاً",
+      "old": "الأقدم أولاً",
+      "progress": "الأعلى تقدماً",
+      "name": "حسب الاسم"
+    },
+    "types": {
+      "all": "الكل",
+      "education": "تعليم",
+      "agriculture": "زراعة",
+      "government": "حكومة رقمية",
+      "robotics": "روبوتات",
+      "knowledge": "معرفة",
+      "energy": "طاقة"
+    }
+  },
+  "jobOpps": {
+    "brand": "نهضة سوريا التقنية",
+    "brandTag": "منصة تجمع العقول لبناء مستقبل سوريا",
+    "hello": "أهلاً وسهلاً",
+    "person": "مستخدم المنصة",
+    "promo": "معاً نبني مستقبل سوريا التقني",
+    "join": "انضم إلى المجتمع ←",
+    "joinToast": "زر تجريبي — يربط بمسار المجتمع الحقيقي",
+    "title": "فرص العمل",
+    "subtitle": "فرص حقيقية لمهندسين يصنعون التغيير",
+    "intro": "وظائف، عمل حر، مشاريع تعاونية، وفرص تطوعية من مؤسسات وشركات ومبادرات محلية ودولية لدعم بناء سوريا.",
+    "post": "نشر فرصة عمل",
+    "explore": "استكشاف الفرص",
+    "together": "معاً نبني",
+    "holo": "فرص عمل أفضل لسوريا جديدة",
+    "globalSearch": "ابحث عن وظائف، مهارات، شركات، مواقع...",
+    "search": "ابحث في الفرص...",
+    "location": "الموقع",
+    "jobType": "نوع العمل",
+    "field": "المجال التقني",
+    "experience": "الخبرة",
+    "close": "إغلاق",
+    "disclaimer": "بيانات حقيقية من المنصة — الفرص المنشورة فعلياً",
+    "resetFilters": "إعادة تعيين الفلاتر",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية — تنتظر ربط API",
+    "demoSearch": "البحث التجريبي يحتاج ربط API",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد",
+    "details": "عرض التفاصيل",
+    "noResults": "لا توجد فرص مطابقة لمعايير البحث.",
+    "ago": "منذ",
+    "days": "يوم",
+    "applicants": "متقدم",
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "jobOpportunities": "فرص العمل",
+      "projects": "المشاريع",
+      "engineers": "المهندسون",
+      "community": "المجتمع",
+      "learning": "التعلم والتطوير",
+      "events": "الفعاليات",
+      "messages": "الرسائل",
+      "settings": "الإعدادات"
+    },
+    "links": {
+      "fulltime": "وظائف بدوام كامل",
+      "freelance": "عمل حر",
+      "volunteer": "فرص تطوعية",
+      "collaborative": "مشاريع تعاونية"
+    },
+    "statLabels": {
+      "total": "إجمالي الفرص",
+      "organizations": "شركة ومؤسسة",
+      "engineersNeeded": "مهندس مطلوب",
+      "international": "فرص دولية",
+      "freelance": "فرص عمل حر",
+      "volunteer": "فرص تطوعية"
+    },
+    "pills": {
+      "all": "الكل",
+      "fulltime": "دوام كامل",
+      "freelance": "عمل حر",
+      "volunteer": "تطوعي",
+      "collaborative": "مشاريع تعاونية"
+    },
+    "locations": {
+      "all": "الكل",
+      "remote": "عن بعد",
+      "syria": "سوريا",
+      "istanbul": "إسطنبول",
+      "international": "دولي"
+    },
+    "types": {
+      "all": "الكل",
+      "fulltime": "دوام كامل",
+      "freelance": "عمل حر",
+      "volunteer": "تطوعي",
+      "collaborative": "تعاوني"
+    },
+    "fields": {
+      "all": "الكل",
+      "ai": "ذكاء اصطناعي",
+      "web": "تطوير ويب",
+      "agri": "زراعة ذكية",
+      "education": "تعليم"
+    },
+    "experiences": {
+      "all": "الكل",
+      "entry": "مبتدئ",
+      "mid": "متوسط",
+      "senior": "خبير"
+    },
+    "badges": {
+      "fulltime": "دوام كامل",
+      "freelance": "عمل حر",
+      "collaborative": "مشروع تعاوني",
+      "volunteer": "تطوعي"
+    }
+  },
+  "profile": {
+    "brand": "نهضة سوريا التقنية",
+    "brandTag": "منصة تجمع العقول لبناء مستقبل سوريا",
+    "globalSearch": "ابحث عن وظائف، مهارات، شركات، مواهب...",
+    "welcome": "أهلاً وسهلاً",
+    "account": "مستخدم المنصة",
+    "promo": "معاً نبني مستقبلاً تقنياً لسوريا",
+    "promoSub": "Together We Build",
+    "edit": "تعديل الملف",
+    "public": "عرض الملف العام",
+    "quote": "التقنية وسيلة لبناء مجتمع أقوى وسوريا أجمل",
+    "completion": "اكتمال الملف المهني",
+    "aboutTitle": "نبذة عني",
+    "skillsTitle": "المهارات والخبرات",
+    "experienceTitle": "الخبرة العملية",
+    "projectsTitle": "أبرز المشاريع",
+    "viewAll": "عرض الكل ←",
+    "additionalTitle": "معلومات إضافية",
+    "languages": "اللغات",
+    "availability": "التوفر",
+    "privacyTitle": "إعدادات الخصوصية",
+    "managePrivacy": "إدارة الخصوصية",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية",
+    "demoSearch": "البحث التجريبي",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد",
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "opportunities": "فرص العمل",
+      "profile": "الملف المهني",
+      "talent": "دليل المواهب",
+      "partnerships": "الشراكات",
+      "events": "الفعاليات",
+      "tools": "الأدوات والموارد",
+      "settings": "الإعدادات"
+    },
+    "stats": {
+      "completedProjects": "مشروع مكتمل",
+      "contributions": "مساهمة تقنية",
+      "skills": "مهارة وخبرة",
+      "connections": "علاقة مهنية",
+      "mentorshipHours": "ساعة إرشاد",
+      "completedTasks": "مهمة منجزة"
+    },
+    "checklist": {
+      "basic": "المعلومات الأساسية",
+      "skills": "المهارات والخبرات",
+      "projects": "المشاريع",
+      "contact": "روابط التواصل"
+    }
   }
 }
