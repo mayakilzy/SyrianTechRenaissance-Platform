@@ -351,5 +351,209 @@
     "engineering": "Engineering Ecosystem",
     "academyNote": "Academy section coming soon",
     "engineeringNote": "Engineering Ecosystem coming soon"
+  },
+  "dashboard": {
+    "nav": {
+      "aria": "Main navigation",
+      "dashboard": "Dashboard",
+      "myProjects": "My Projects",
+      "workOpportunities": "Job Opportunities",
+      "projects": "Projects",
+      "engineers": "Engineers",
+      "community": "Community",
+      "learning": "Learning & Development",
+      "events": "Events",
+      "messages": "Messages",
+      "settings": "Settings"
+    },
+    "workspace": {
+      "label": "WORKSPACES",
+      "personalProjects": "Personal Projects",
+      "team": "My Team",
+      "favorites": "Favorite Projects",
+      "organizations": "Organizations"
+    },
+    "heritage": {
+      "alt": "Syrian heritage",
+      "title": "Together we build Syria's technology future",
+      "cta": "Join the community →"
+    },
+    "brandAr": "Technology for Syria",
+    "search": "Search projects, engineers, opportunities, technologies...",
+    "themeToggle": "Toggle theme",
+    "darkModeIsReference": "Dark mode is the approved visual reference for this page",
+    "changeLanguage": "Change language",
+    "notifications": "Notifications",
+    "demoNotifications": "Notifications are demo data awaiting API integration",
+    "demoSearch": "Demo search requires API integration",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "welcomeSmall": "Welcome back",
+    "userName": "Platform User",
+    "avatarInitial": "U",
+    "hero": {
+      "subtitle": "Together we build Syria's future through technology and knowledge",
+      "quote": "\"Every idea today can build a better tomorrow for Syria.\"",
+      "newProject": "Create New Project",
+      "explore": "Explore Opportunities",
+      "newProjectToast": "Create Project requires integration with the application route",
+      "hologram": "Build · Collaborate\nLearn · Grow",
+      "titlePrefix": "Welcome back,"
+    },
+    "stats": {
+      "aria": "Account statistics",
+      "newConnections": "New connections",
+      "contributions": "Contributions this month",
+      "proposalsReview": "Proposals under review",
+      "savedOpportunities": "Saved opportunities",
+      "activeProjects": "Active projects"
+    },
+    "common": {
+      "viewAll": "View all",
+      "save": "Save",
+      "saved": "Saved",
+      "connect": "Connect"
+    },
+    "learning": {
+      "title": "Your Learning Journey",
+      "advancedLevel": "Advanced level",
+      "completeJourney": "Continue your learning journey",
+      "prompt": "Keep growing your skills to reach the next level",
+      "ai": "Artificial Intelligence",
+      "ux": "User Experience Design",
+      "databases": "Databases",
+      "empty": "Learning journey not connected yet — link your skills in your profile to track progress"
+    },
+    "opportunities": {
+      "title": "Opportunities for You",
+      "remote": "Remote",
+      "empty": "No opportunities available right now — check later or explore all opportunities"
+    },
+    "projects": {
+      "title": "My Current Projects",
+      "empty": "No active projects yet — start by creating a new proposal",
+      "status": {
+        "inDevelopment": "In progress",
+        "review": "Review",
+        "completed": "Completed"
+      }
+    },
+    "featured": {
+      "title": "Featured Community Projects",
+      "aiEducation": "Education · Tech",
+      "greenTech": "Green Technology",
+      "desc": "Active community project — details from actual project",
+      "empty": "No featured community projects available right now"
+    },
+    "engineers": {
+      "title": "Recommended Engineers",
+      "empty": "No recommended engineers available right now",
+      "connectToast": "Demo button — connect this action to the API"
+    },
+    "activity": {
+      "title": "Recent Activity",
+      "empty": "No recent activity"
+    },
+    "footer": {
+      "demoNotice": "Real platform data — demo numbers are clearly labeled"
+    }
+  },
+  "myProjects": {
+    "title": "My Projects",
+    "brandSub": "A Tech-Powered Syria",
+    "welcome": "Welcome",
+    "user": "Platform User",
+    "avatarInitial": "U",
+    "globalSearch": "Search for projects, engineers, opportunities...",
+    "themeToggle": "Toggle theme",
+    "darkModeIsReference": "Dark mode is the approved visual reference",
+    "changeLanguage": "Change language",
+    "notifications": "Notifications",
+    "demoNotifications": "Notifications are demo data awaiting API integration",
+    "demoSearch": "Demo search requires API integration",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "heroSubtitle": "Turn Ideas Into Real Impact for Syria",
+    "heroDescription": "Manage your projects, track progress, collaborate with your team, and contribute to a brighter future.",
+    "create": "Create New Project",
+    "explore": "Explore Opportunities",
+    "holoTitle": "My Projects · Stronger Teams · A Brighter Syria",
+    "statsAria": "Project statistics",
+    "filtersAria": "Project filters",
+    "projectSearch": "Search my projects ...",
+    "sortLabel": "Sort by",
+    "typeLabel": "Project Type",
+    "statusLabel": "Status",
+    "resetFilters": "Reset filters",
+    "gridView": "Grid view",
+    "listView": "List view",
+    "updated": "Updated",
+    "tasks": "Open Tasks",
+    "members": "Members",
+    "details": "View Details →",
+    "noResults": "No projects match your filters.",
+    "demoNotice": "Real platform data — actual projects and contributions",
+    "nav": {
+      "aria": "Main navigation",
+      "dashboard": "Dashboard",
+      "myProjects": "My Projects",
+      "workOpportunities": "Job Opportunities",
+      "projects": "Projects",
+      "engineers": "Engineers",
+      "community": "Community",
+      "learning": "Learning & Development",
+      "events": "Events",
+      "messages": "Messages",
+      "settings": "Settings"
+    },
+    "workspace": {
+      "label": "Workspaces",
+      "personalProjects": "My Workspace",
+      "team": "My Team",
+      "favorites": "Saved Projects",
+      "organizations": "Organizations"
+    },
+    "promo": {
+      "title": "Together We Build a Tech-Powered Syria",
+      "join": "Join the Community →",
+      "joinToast": "Demo button — connect to the real community route"
+    },
+    "stats": {
+      "total": "Total Projects",
+      "active": "Active Projects",
+      "completed": "Completed",
+      "hold": "On Hold",
+      "members": "Team Members",
+      "contributions": "Total Contributions"
+    },
+    "tabs": {
+      "all": "All",
+      "active": "Active",
+      "completed": "Completed",
+      "hold": "On Hold",
+      "draft": "Drafts"
+    },
+    "status": {
+      "all": "All",
+      "active": "Active",
+      "completed": "Completed",
+      "hold": "On Hold",
+      "draft": "Draft"
+    },
+    "sorts": {
+      "recent": "Recently Updated",
+      "old": "Oldest First",
+      "progress": "Highest Progress",
+      "name": "By Name"
+    },
+    "types": {
+      "all": "All",
+      "education": "Education",
+      "agriculture": "Agriculture",
+      "government": "Government",
+      "robotics": "Robotics",
+      "knowledge": "Knowledge",
+      "energy": "Energy"
+    }
   }
 }
