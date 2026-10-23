@@ -555,5 +555,108 @@
       "knowledge": "Knowledge",
       "energy": "Energy"
     }
+  },
+  "jobOpps": {
+    "brand": "Syrian Tech Renaissance",
+    "brandTag": "A Tech-Powered Syria",
+    "hello": "Welcome",
+    "person": "Platform User",
+    "promo": "Together We Build a Tech-Powered Syria",
+    "join": "Join the Community →",
+    "joinToast": "Demo button — connect to the real community route",
+    "title": "Job Opportunities",
+    "subtitle": "Real Opportunities for Engineers Who Build Change",
+    "intro": "Jobs, freelance work, collaborative projects and volunteer opportunities from organizations and companies supporting Syria's future.",
+    "post": "Post a Job Opportunity",
+    "explore": "Explore Opportunities",
+    "together": "Together",
+    "holo": "We Create Better Opportunities for a New Syria",
+    "globalSearch": "Search for jobs, skills, companies, locations...",
+    "search": "Search opportunities...",
+    "location": "Location",
+    "jobType": "Job Type",
+    "field": "Technical Field",
+    "experience": "Experience",
+    "close": "Close",
+    "disclaimer": "Real platform data — actual published opportunities",
+    "resetFilters": "Reset filters",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "changeLanguage": "Change language",
+    "notifications": "Notifications",
+    "demoNotifications": "Notifications are demo data awaiting API integration",
+    "demoSearch": "Demo search requires API integration",
+    "darkModeIsReference": "Dark mode is the approved visual reference",
+    "details": "View Details",
+    "noResults": "No opportunities match your filters.",
+    "ago": "",
+    "days": "days ago",
+    "applicants": "applicants",
+    "nav": {
+      "dashboard": "Dashboard",
+      "myProjects": "My Projects",
+      "jobOpportunities": "Job Opportunities",
+      "projects": "Projects",
+      "engineers": "Engineers",
+      "community": "Community",
+      "learning": "Learning & Development",
+      "events": "Events",
+      "messages": "Messages",
+      "settings": "Settings"
+    },
+    "links": {
+      "fulltime": "Full-time Jobs",
+      "freelance": "Freelance Work",
+      "volunteer": "Volunteer Opportunities",
+      "collaborative": "Collaborative Projects"
+    },
+    "statLabels": {
+      "total": "Total Opportunities",
+      "organizations": "Organizations",
+      "engineersNeeded": "Engineers Needed",
+      "international": "International Opportunities",
+      "freelance": "Freelance Opportunities",
+      "volunteer": "Volunteer Opportunities"
+    },
+    "pills": {
+      "all": "All",
+      "fulltime": "Full-time",
+      "freelance": "Freelance",
+      "volunteer": "Volunteer",
+      "collaborative": "Collaborative"
+    },
+    "locations": {
+      "all": "All",
+      "remote": "Remote",
+      "syria": "Syria",
+      "istanbul": "Istanbul",
+      "international": "International"
+    },
+    "types": {
+      "all": "All",
+      "fulltime": "Full-time",
+      "freelance": "Freelance",
+      "volunteer": "Volunteer",
+      "collaborative": "Collaborative"
+    },
+    "fields": {
+      "all": "All",
+      "ai": "Artificial Intelligence",
+      "web": "Web Development",
+      "agri": "Smart Agriculture",
+      "education": "Education"
+    },
+    "experiences": {
+      "all": "All",
+      "entry": "Entry Level",
+      "mid": "Mid Level",
+      "senior": "Senior"
+    },
+    "badges": {
+      "fulltime": "Full-time",
+      "freelance": "Freelance",
+      "collaborative": "Collaborative",
+      "volunteer": "Volunteer"
+    }
   }
 }

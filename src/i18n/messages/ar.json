@@ -555,5 +555,108 @@
       "knowledge": "معرفة",
       "energy": "طاقة"
     }
+  },
+  "jobOpps": {
+    "brand": "نهضة سوريا التقنية",
+    "brandTag": "منصة تجمع العقول لبناء مستقبل سوريا",
+    "hello": "أهلاً وسهلاً",
+    "person": "مستخدم المنصة",
+    "promo": "معاً نبني مستقبل سوريا التقني",
+    "join": "انضم إلى المجتمع ←",
+    "joinToast": "زر تجريبي — يربط بمسار المجتمع الحقيقي",
+    "title": "فرص العمل",
+    "subtitle": "فرص حقيقية لمهندسين يصنعون التغيير",
+    "intro": "وظائف، عمل حر، مشاريع تعاونية، وفرص تطوعية من مؤسسات وشركات ومبادرات محلية ودولية لدعم بناء سوريا.",
+    "post": "نشر فرصة عمل",
+    "explore": "استكشاف الفرص",
+    "together": "معاً نبني",
+    "holo": "فرص عمل أفضل لسوريا جديدة",
+    "globalSearch": "ابحث عن وظائف، مهارات، شركات، مواقع...",
+    "search": "ابحث في الفرص...",
+    "location": "الموقع",
+    "jobType": "نوع العمل",
+    "field": "المجال التقني",
+    "experience": "الخبرة",
+    "close": "إغلاق",
+    "disclaimer": "بيانات حقيقية من المنصة — الفرص المنشورة فعلياً",
+    "resetFilters": "إعادة تعيين الفلاتر",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية — تنتظر ربط API",
+    "demoSearch": "البحث التجريبي يحتاج ربط API",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد",
+    "details": "عرض التفاصيل",
+    "noResults": "لا توجد فرص مطابقة لمعايير البحث.",
+    "ago": "منذ",
+    "days": "يوم",
+    "applicants": "متقدم",
+    "nav": {
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "jobOpportunities": "فرص العمل",
+      "projects": "المشاريع",
+      "engineers": "المهندسون",
+      "community": "المجتمع",
+      "learning": "التعلم والتطوير",
+      "events": "الفعاليات",
+      "messages": "الرسائل",
+      "settings": "الإعدادات"
+    },
+    "links": {
+      "fulltime": "وظائف بدوام كامل",
+      "freelance": "عمل حر",
+      "volunteer": "فرص تطوعية",
+      "collaborative": "مشاريع تعاونية"
+    },
+    "statLabels": {
+      "total": "إجمالي الفرص",
+      "organizations": "شركة ومؤسسة",
+      "engineersNeeded": "مهندس مطلوب",
+      "international": "فرص دولية",
+      "freelance": "فرص عمل حر",
+      "volunteer": "فرص تطوعية"
+    },
+    "pills": {
+      "all": "الكل",
+      "fulltime": "دوام كامل",
+      "freelance": "عمل حر",
+      "volunteer": "تطوعي",
+      "collaborative": "مشاريع تعاونية"
+    },
+    "locations": {
+      "all": "الكل",
+      "remote": "عن بعد",
+      "syria": "سوريا",
+      "istanbul": "إسطنبول",
+      "international": "دولي"
+    },
+    "types": {
+      "all": "الكل",
+      "fulltime": "دوام كامل",
+      "freelance": "عمل حر",
+      "volunteer": "تطوعي",
+      "collaborative": "تعاوني"
+    },
+    "fields": {
+      "all": "الكل",
+      "ai": "ذكاء اصطناعي",
+      "web": "تطوير ويب",
+      "agri": "زراعة ذكية",
+      "education": "تعليم"
+    },
+    "experiences": {
+      "all": "الكل",
+      "entry": "مبتدئ",
+      "mid": "متوسط",
+      "senior": "خبير"
+    },
+    "badges": {
+      "fulltime": "دوام كامل",
+      "freelance": "عمل حر",
+      "collaborative": "مشروع تعاوني",
+      "volunteer": "تطوعي"
+    }
   }
 }
