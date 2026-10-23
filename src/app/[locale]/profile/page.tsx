@@ -135,9 +135,9 @@ export default async function ProfilePage({
     completedProjects,
     contributions: contributionsCount,
     skills: skillsCount,
-    connections: 0, // No connections API — honest 0
-    mentorshipHours: 0, // No mentorship API — honest 0
-    completedTasks: 0, // No task completion API — honest 0
+    connections: null, // STR-UI-05A FIX: No connections API — unavailable, not zero
+    mentorshipHours: null, // No mentorship API — unavailable, not zero
+    completedTasks: null, // No task completion API — unavailable, not zero
   };
 
   const myProjectsData = myProjects.map((p) => ({

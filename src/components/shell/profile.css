@@ -5,7 +5,7 @@
  */
 
 .str05-shell {
-  font-family: var(--font-cairo, Cairo, Arial, sans-serif;
+  font-family: var(--font-cairo, Cairo), Arial, sans-serif;
 }
 html[dir="ltr"] .str05-shell {
   font-family: var(--font-ibm-plex, "IBM Plex Sans"), Arial, sans-serif;

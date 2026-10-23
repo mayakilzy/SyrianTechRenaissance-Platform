@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
@@ -26,13 +27,19 @@ export function ProfileContent({
   locale,
 }: {
   profile: ProfileData | null;
-  stats: { completedProjects: number; contributions: number; skills: number; connections: number; mentorshipHours: number; completedTasks: number; };
+  stats: { completedProjects: number; contributions: number; skills: number; connections: number | null; mentorshipHours: number | null; completedTasks: number | null; };
   myProjects: ProjectData[];
   hasError: boolean;
   locale: string;
 }) {
   const t = useTranslations("profile");
   const isAr = locale === "ar";
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
   // Profile not found / error state
   if (hasError || !profile) {
@@ -55,14 +62,21 @@ export function ProfileContent({
     );
   }
 
+  // STR-UI-05A FIX: Represent unavailable metrics honestly — use "—" not "0"
+  // A null value means the API/metric genuinely doesn't exist, not that the count is zero.
+  const formatStatValue = (val: number | null): string => {
+    if (val === null) return "\u2014"; // em dash for "unavailable"
+    return String(val);
+  };
+
   const statIcons = ["\u25A3", "\u2318", "\u25B1", "\u2667", "\u265C", "\u2611"];
   const statValues = [
-    { value: stats.completedProjects, label: t("stats.completedProjects") },
-    { value: stats.contributions, label: t("stats.contributions") },
-    { value: stats.skills, label: t("stats.skills") },
-    { value: stats.connections, label: t("stats.connections") },
-    { value: stats.mentorshipHours, label: t("stats.mentorshipHours") },
-    { value: stats.completedTasks, label: t("stats.completedTasks") },
+    { value: formatStatValue(stats.completedProjects), label: t("stats.completedProjects") },
+    { value: formatStatValue(stats.contributions), label: t("stats.contributions") },
+    { value: formatStatValue(stats.skills), label: t("stats.skills") },
+    { value: formatStatValue(stats.connections), label: t("stats.connections") },
+    { value: formatStatValue(stats.mentorshipHours), label: t("stats.mentorshipHours") },
+    { value: formatStatValue(stats.completedTasks), label: t("stats.completedTasks") },
   ];
 
   const checklist = [
@@ -101,10 +115,23 @@ export function ProfileContent({
               <span>{profile.availability}</span>
             </div>
             <div className="hero-actions">
-              <button className="gradient-button" onClick={() => { window.location.href = isAr ? "/profile/edit" : "/en/profile/edit"; }}>
+              {/* STR-UI-05A FIX: Edit Profile button — no /profile/edit route exists.
+                  The updateOwnProfile service function exists but there is no API route or UI page for it.
+                  Per MASTER's directive: report as functional blocker, not operational. */}
+              <button
+                className="gradient-button"
+                onClick={() => showToast(isAr
+                  ? "تعديل الملف غير متاح حالياً — مسار التحرير قيد التطوير"
+                  : "Profile editing is not available yet — editing route is under development")}
+                aria-label={t("edit")}
+              >
                 {t("edit")}
               </button>
-              <button className="outline-button" onClick={() => { window.location.href = isAr ? `/talent/${profile ? "" : ""}` : `/en/talent/${profile ? "" : ""}`; }}>
+              {/* Public Profile button — links to talent directory (existing route) */}
+              <button
+                className="outline-button"
+                onClick={() => { window.location.href = isAr ? "/talent" : "/en/talent"; }}
+              >
                 {t("public")}
               </button>
             </div>
@@ -129,7 +156,7 @@ export function ProfileContent({
         </div>
       </section>
 
-      {/* Stats */}
+      {/* Stats — STR-UI-05A FIX: unavailable metrics show "—" not "0" */}
       <section className="stats">
         {statValues.map((stat, i) => (
           <div key={i} className="stat">
@@ -174,9 +201,11 @@ export function ProfileContent({
           )}
         </article>
 
-        {/* Experience (Portfolio items as experience) */}
+        {/* STR-UI-05A FIX: Experience panel — portfolio items are NOT employment history.
+            Changed label from "Experience/الخبرة العملية" to "Portfolio/أعمال ومشاريع"
+            to truthfully reflect what the data represents. */}
         <article className="panel experience">
-          <h3><span className="heading-icon">{"\u25A3"}</span><span>{t("experienceTitle")}</span></h3>
+          <h3><span className="heading-icon">{"\u25A3"}</span><span>{isAr ? "أعمال ومشاريع" : "Portfolio & Work"}</span></h3>
           {profile.portfolio.length > 0 ? (
             <div className="timeline">
               {profile.portfolio.map((item, i) => (
@@ -190,7 +219,7 @@ export function ProfileContent({
             </div>
           ) : (
             <p style={{ fontSize: "11px", color: "#a6c5e9", textAlign: "center", padding: "20px 0" }}>
-              {isAr ? "لا توجد خبرات مسجلة بعد." : "No experience recorded yet."}
+              {isAr ? "لا توجد أعمال مضافة بعد." : "No portfolio items added yet."}
             </p>
           )}
         </article>
@@ -253,7 +282,15 @@ export function ProfileContent({
               <span>{isAr ? "المشاريع" : "Projects"}</span>
               <span>{profile.visibility?.showPortfolio ? (isAr ? "مرئية للجميع" : "Visible to Everyone") : (isAr ? "مخفية" : "Hidden")}</span>
             </div>
-            <button className="small-button" onClick={() => { window.location.href = isAr ? "/profile/privacy" : "/en/profile/privacy"; }}>
+            {/* STR-UI-05A FIX: Privacy management button — no /profile/privacy route exists.
+                The updateVisibility service function exists but there is no API route or UI page for it.
+                Per MASTER's directive: report as functional blocker, not operational. */}
+            <button
+              className="small-button"
+              onClick={() => showToast(isAr
+                ? "إدارة الخصوصية غير متاحة حالياً — صفحة الإعدادات قيد التطوير"
+                : "Privacy management is not available yet — settings page is under development")}
+            >
               {t("managePrivacy")}
             </button>
           </article>
@@ -264,6 +301,12 @@ export function ProfileContent({
         <span>STR {"\u2014"} Syrian Tech Renaissance</span>
         <span>{isAr ? "بيانات حقيقية من المنصة" : "Real platform data"}</span>
       </footer>
+
+      {toast && (
+        <div style={{ position: "fixed", bottom: "24px", left: "24px", background: "#0c3763", border: "1px solid #22a7ff", color: "white", borderRadius: "8px", padding: "12px 18px", zIndex: 50, boxShadow: "0 8px 30px rgba(0,0,0,0.55)" }} role="status" aria-live="polite">
+          {toast}
+        </div>
+      )}
     </>
   );
 }
