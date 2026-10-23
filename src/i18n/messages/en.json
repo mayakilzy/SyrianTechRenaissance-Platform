@@ -457,5 +457,103 @@
     "footer": {
       "demoNotice": "Real platform data — demo numbers are clearly labeled"
     }
+  },
+  "myProjects": {
+    "title": "My Projects",
+    "brandSub": "A Tech-Powered Syria",
+    "welcome": "Welcome",
+    "user": "Platform User",
+    "avatarInitial": "U",
+    "globalSearch": "Search for projects, engineers, opportunities...",
+    "themeToggle": "Toggle theme",
+    "darkModeIsReference": "Dark mode is the approved visual reference",
+    "changeLanguage": "Change language",
+    "notifications": "Notifications",
+    "demoNotifications": "Notifications are demo data awaiting API integration",
+    "demoSearch": "Demo search requires API integration",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "heroSubtitle": "Turn Ideas Into Real Impact for Syria",
+    "heroDescription": "Manage your projects, track progress, collaborate with your team, and contribute to a brighter future.",
+    "create": "Create New Project",
+    "explore": "Explore Opportunities",
+    "holoTitle": "My Projects · Stronger Teams · A Brighter Syria",
+    "statsAria": "Project statistics",
+    "filtersAria": "Project filters",
+    "projectSearch": "Search my projects ...",
+    "sortLabel": "Sort by",
+    "typeLabel": "Project Type",
+    "statusLabel": "Status",
+    "resetFilters": "Reset filters",
+    "gridView": "Grid view",
+    "listView": "List view",
+    "updated": "Updated",
+    "tasks": "Open Tasks",
+    "members": "Members",
+    "details": "View Details →",
+    "noResults": "No projects match your filters.",
+    "demoNotice": "Real platform data — actual projects and contributions",
+    "nav": {
+      "aria": "Main navigation",
+      "dashboard": "Dashboard",
+      "myProjects": "My Projects",
+      "workOpportunities": "Job Opportunities",
+      "projects": "Projects",
+      "engineers": "Engineers",
+      "community": "Community",
+      "learning": "Learning & Development",
+      "events": "Events",
+      "messages": "Messages",
+      "settings": "Settings"
+    },
+    "workspace": {
+      "label": "Workspaces",
+      "personalProjects": "My Workspace",
+      "team": "My Team",
+      "favorites": "Saved Projects",
+      "organizations": "Organizations"
+    },
+    "promo": {
+      "title": "Together We Build a Tech-Powered Syria",
+      "join": "Join the Community →",
+      "joinToast": "Demo button — connect to the real community route"
+    },
+    "stats": {
+      "total": "Total Projects",
+      "active": "Active Projects",
+      "completed": "Completed",
+      "hold": "On Hold",
+      "members": "Team Members",
+      "contributions": "Total Contributions"
+    },
+    "tabs": {
+      "all": "All",
+      "active": "Active",
+      "completed": "Completed",
+      "hold": "On Hold",
+      "draft": "Drafts"
+    },
+    "status": {
+      "all": "All",
+      "active": "Active",
+      "completed": "Completed",
+      "hold": "On Hold",
+      "draft": "Draft"
+    },
+    "sorts": {
+      "recent": "Recently Updated",
+      "old": "Oldest First",
+      "progress": "Highest Progress",
+      "name": "By Name"
+    },
+    "types": {
+      "all": "All",
+      "education": "Education",
+      "agriculture": "Agriculture",
+      "government": "Government",
+      "robotics": "Robotics",
+      "knowledge": "Knowledge",
+      "energy": "Energy"
+    }
   }
 }

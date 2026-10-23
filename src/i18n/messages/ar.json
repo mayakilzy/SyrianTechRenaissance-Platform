@@ -457,5 +457,103 @@
     "footer": {
       "demoNotice": "بيانات حقيقية من المنصة — الأرقام التجريبية موسومة بوضوح"
     }
+  },
+  "myProjects": {
+    "title": "مشاريعي",
+    "brandSub": "نهضة سوريا التقنية",
+    "welcome": "أهلاً وسهلاً",
+    "user": "مستخدم المنصة",
+    "avatarInitial": "م",
+    "globalSearch": "ابحث عن مشاريع، مهندسين، فرص...",
+    "themeToggle": "تبديل السمة",
+    "darkModeIsReference": "السمة الداكنة هي المرجع المعتمد",
+    "changeLanguage": "تغيير اللغة",
+    "notifications": "التنبيهات",
+    "demoNotifications": "الإشعارات تجريبية — تنتظر ربط API",
+    "demoSearch": "البحث التجريبي يحتاج ربط API",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة",
+    "heroSubtitle": "مشاريعي ومساهماتي في بناء مستقبل سوريا",
+    "heroDescription": "إدارة مشاريعك، متابعة التقدم، التعاون مع الفريق، وتحقيق الأهداف معاً.",
+    "create": "إنشاء مشروع جديد",
+    "explore": "استكشاف فرص العمل",
+    "holoTitle": "معاً نبني سوريا تقنية مستقرة ومتقدمة",
+    "statsAria": "إحصاءات المشاريع",
+    "filtersAria": "فلاتر المشاريع",
+    "projectSearch": "ابحث في مشاريعي...",
+    "sortLabel": "الترتيب",
+    "typeLabel": "نوع المشروع",
+    "statusLabel": "الحالة",
+    "resetFilters": "إعادة تعيين الفلاتر",
+    "gridView": "عرض شبكي",
+    "listView": "عرض قائمة",
+    "updated": "آخر تحديث",
+    "tasks": "مهام مفتوحة",
+    "members": "أعضاء",
+    "details": "عرض التفاصيل ←",
+    "noResults": "لا توجد مشاريع مطابقة للفلاتر.",
+    "demoNotice": "بيانات حقيقية من المنصة — المشاريع والمساهمات الفعلية",
+    "nav": {
+      "aria": "التنقل الرئيسي",
+      "dashboard": "لوحة التحكم",
+      "myProjects": "مشاريعي",
+      "workOpportunities": "فرص العمل",
+      "projects": "المشاريع",
+      "engineers": "المهندسون",
+      "community": "المجتمع",
+      "learning": "التعلم والتطوير",
+      "events": "الفعاليات",
+      "messages": "الرسائل",
+      "settings": "الإعدادات"
+    },
+    "workspace": {
+      "label": "مساحات العمل",
+      "personalProjects": "مشاريعي الشخصية",
+      "team": "فريق العمل",
+      "favorites": "المشاريع المفضلة",
+      "organizations": "المنظمات"
+    },
+    "promo": {
+      "title": "معاً نبني مستقبل سوريا التقني",
+      "join": "انضم إلى المجتمع ←",
+      "joinToast": "زر تجريبي — يربط بمسار المجتمع الحقيقي"
+    },
+    "stats": {
+      "total": "إجمالي مشاريعي",
+      "active": "قيد التنفيذ",
+      "completed": "مكتملة",
+      "hold": "متوقفة مؤقتاً",
+      "members": "إجمالي أعضاء الفرق",
+      "contributions": "إجمالي مساهماتي"
+    },
+    "tabs": {
+      "all": "الكل",
+      "active": "قيد التنفيذ",
+      "completed": "مكتملة",
+      "hold": "متوقفة",
+      "draft": "مقترحات"
+    },
+    "status": {
+      "all": "الكل",
+      "active": "قيد التنفيذ",
+      "completed": "مكتملة",
+      "hold": "متوقفة مؤقتاً",
+      "draft": "مقترحات"
+    },
+    "sorts": {
+      "recent": "الأحدث أولاً",
+      "old": "الأقدم أولاً",
+      "progress": "الأعلى تقدماً",
+      "name": "حسب الاسم"
+    },
+    "types": {
+      "all": "الكل",
+      "education": "تعليم",
+      "agriculture": "زراعة",
+      "government": "حكومة رقمية",
+      "robotics": "روبوتات",
+      "knowledge": "معرفة",
+      "energy": "طاقة"
+    }
   }
 }
