@@ -120,10 +120,7 @@ export function ProfileContent({
                   Per MASTER's directive: report as functional blocker, not operational. */}
               <button
                 className="gradient-button"
-                onClick={() => showToast(isAr
-                  ? "تعديل الملف غير متاح حالياً — مسار التحرير قيد التطوير"
-                  : "Profile editing is not available yet — editing route is under development")}
-                aria-label={t("edit")}
+                onClick={() => { window.location.href = isAr ? "/profile/edit" : "/en/profile/edit"; }}
               >
                 {t("edit")}
               </button>
@@ -287,9 +284,7 @@ export function ProfileContent({
                 Per MASTER's directive: report as functional blocker, not operational. */}
             <button
               className="small-button"
-              onClick={() => showToast(isAr
-                ? "إدارة الخصوصية غير متاحة حالياً — صفحة الإعدادات قيد التطوير"
-                : "Privacy management is not available yet — settings page is under development")}
+              onClick={() => { window.location.href = isAr ? "/profile/privacy" : "/en/profile/privacy"; }}
             >
               {t("managePrivacy")}
             </button>
