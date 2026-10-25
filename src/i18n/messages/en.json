@@ -27,32 +27,156 @@
     "language": "Language"
   },
   "home": {
-    "heroTitle": "Building Capability, Creating Opportunity",
-    "heroSubtitle": "A Syrian institutional platform that brings together tech talent, projects, and partnerships in a productive, neutral workspace.",
-    "heroCtaPrimary": "Read the mission",
-    "heroCtaSecondary": "Propose a project",
-    "pillarsTitle": "Four axes of renaissance",
-    "pillarsSubtitle": "We turn skills into productive teams, and projects into measurable impact.",
-    "pillarEconomic": "Economic & Commercial",
-    "pillarEconomicDesc": "Professional opportunities, contracts, and partnerships that benefit participants.",
-    "pillarDevelopmental": "Developmental",
-    "pillarDevelopmentalDesc": "Projects that reinvest in Syrian education and infrastructure.",
-    "pillarEducational": "Educational",
-    "pillarEducationalDesc": "Hands-on learning and collaborative engineering within real teams.",
-    "pillarEngineering": "Engineering & Productive",
-    "pillarEngineeringDesc": "Sustained technical production under clear professional governance.",
-    "principlesTitle": "Principles we uphold",
-    "principleNeutral": "Political, religious, sectarian, and party neutrality",
-    "principleNeutralDesc": "Collaboration is governed by expertise, work, and integrity — not loyalty.",
-    "principleGovernance": "Team governance through approved projects",
-    "principleGovernanceDesc": "No operational team without an approved charter, lead, and institutional steward.",
-    "principleIntegration": "Real integrations, not fake facades",
-    "principleIntegrationDesc": "We build a trustworthy integration core; we do not advertise untested connectors as live.",
-    "principleEvidence": "Evidence before claims",
-    "principleEvidenceDesc": "Real browser tests are the acceptance bar — unit tests alone are not enough.",
-    "statusTitle": "Platform status",
-    "statusG01": "Beta",
-    "statusNote": "Syrian Tech Renaissance — an institutional platform for talent and project building"
+    "demoBanner": {
+      "text": "Beta platform — trial operation phase",
+      "switchLangAria": "Switch language"
+    },
+    "brand": {
+      "aria": "Syrian Tech Renaissance — Home",
+      "subtitle": "Syria's Tech Renaissance"
+    },
+    "search": {
+      "placeholder": "Search projects, engineers, technologies or ideas..."
+    },
+    "notifications": {
+      "aria": "Platform notifications"
+    },
+    "profile": {
+      "user": "User",
+      "guest": "Guest",
+      "guestSubtitle": "Sign in to continue",
+      "guestAria": "Sign in",
+      "signedInAria": "Your profile"
+    },
+    "menu": {
+      "openAria": "Open menu",
+      "closeAria": "Close menu"
+    },
+    "nav": {
+      "aria": "Main navigation",
+      "home": "Home",
+      "projects": "Projects",
+      "community": "Community",
+      "engineers": "Engineers",
+      "opportunities": "Contribute",
+      "learning": "Learning",
+      "ai": "AI Assistant",
+      "events": "Events",
+      "messages": "Messages"
+    },
+    "workspace": {
+      "title": "Workspaces",
+      "personal": "My workspace",
+      "joined": "Joined projects",
+      "proposed": "Proposed",
+      "favorites": "Favorites"
+    },
+    "heritage": {
+      "title": "Together we build Syria's tech future",
+      "cta": "Learn about the initiative ←"
+    },
+    "hero": {
+      "eyebrow": "SYRIAN TECH RENAISSANCE · DIGITAL FUTURE",
+      "title": "Building Syria's future with minds and technology",
+      "subtitle": "A platform connecting engineers and innovators to build meaningful technology projects",
+      "ctaPrimary": "Explore projects",
+      "ctaSecondary": "Join the community",
+      "quote": "Technology alone does not change the world — the people who use it for a greater purpose do."
+    },
+    "hologram": {
+      "ideas": "Ideas",
+      "solutions": "Solutions",
+      "impact": "Impact"
+    },
+    "holoLabel": {
+      "build": "Build",
+      "collaborate": "Collaborate",
+      "learn": "Learn",
+      "grow": "Grow"
+    },
+    "stats": {
+      "aria": "Platform metrics",
+      "engineers": "Engineers",
+      "activeProjects": "Active projects",
+      "contributions": "Contributions this month",
+      "opportunities": "Open opportunities",
+      "events": "Upcoming events"
+    },
+    "ai": {
+      "title": "Start with AI assistance",
+      "subtitle": "Turn your idea into a technical project using our AI assistant",
+      "placeholder": "Describe your idea or technical question...",
+      "demoOnlyAria": "Demo only — AI assistant not yet available",
+      "chip1": "Project idea analysis",
+      "chip2": "Tech suggestion",
+      "chip3": "Execution plan",
+      "chip4": "Tech questions",
+      "chip5": "Architecture design",
+      "chip6": "Code review"
+    },
+    "explore": {
+      "title": "Find a project for you",
+      "subtitle": "Explore real projects across fields and join teams making a difference",
+      "cta": "View all projects"
+    },
+    "category": {
+      "ai": "AI",
+      "web": "Web & apps",
+      "data": "Data & analytics",
+      "infra": "Infrastructure",
+      "education": "Tech education",
+      "more": "More"
+    },
+    "learning": {
+      "title": "Develop your skills",
+      "subtitle": "Learn from top engineers through courses and practical content",
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced",
+      "comingSoon": {
+        "title": "Educational content coming soon",
+        "subtitle": "We're working on interactive learning paths",
+        "title2": "Practical lessons coming soon",
+        "subtitle2": "Hands-on educational content on the platform"
+      }
+    },
+    "featured": {
+      "title": "Featured projects",
+      "viewAll": "View all",
+      "empty": "No active projects yet — stay tuned",
+      "status": {
+        "open": "Open to contribute",
+        "seeking": "Seeking team",
+        "inProgress": "In development"
+      }
+    },
+    "engineers": {
+      "title": "Featured engineers",
+      "viewAll": "View all",
+      "comingSoon": {
+        "title": "Engineer profiles coming soon",
+        "subtitle": "We're building the public engineer profile system",
+        "cta": "Browse talent"
+      }
+    },
+    "activity": {
+      "title": "Recent activity",
+      "viewAll": "View all",
+      "comingSoon": {
+        "title": "Public activity coming soon",
+        "subtitle": "Sign in to follow your personal activity",
+        "cta": "Go to dashboard",
+        "ctaGuest": "Sign in"
+      }
+    },
+    "comingSoon": {
+      "toast": "This section is under development — thank you for your patience",
+      "aria": "Coming soon",
+      "short": "Soon"
+    },
+    "footer": {
+      "text": "STR · Syrian Tech Renaissance Platform · Beta phase"
+    }
   },
   "footer": {
     "rights": "© 2026 Syrian Tech Renaissance. All rights reserved.",

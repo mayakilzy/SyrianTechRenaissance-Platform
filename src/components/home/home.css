@@ -1,0 +1,985 @@
+/* STR UI-01 — Home Dashboard integration CSS (adapted from v1.2 source)
+ *
+ * Source: STR_UI_01_HOME_REFERENCE_v1.2.zip (SHA-256 58835abdb30ce0c2b33f858faf88c57279092fb1180da69dc7a0e423660b641a)
+ *
+ * Scoped under .str-home to avoid leaking styles to other pages.
+ * Loaded only on src/app/[locale]/page.tsx via home-shell.tsx.
+ *
+ * Adaptations from v1.2 source:
+ *   - :root replaced with .str-home (variables scoped)
+ *   - body replaced with .str-home (the wrapper div)
+ *   - html[dir="ltr"] rules scoped under .str-home
+ *   - url('assets/...') replaced with url('/home/...') (Next.js public path)
+ *
+ * v1.2 visual fidelity preserved: same color tokens, same layout, same
+ * responsive breakpoints, same D1-D4 SVG sizing fix, same R5 mobile
+ * overflow fix, same R1 Tajawal typography, same R6 complete localization
+ * mechanism (now via next-intl instead of data-ar/data-en).
+ */
+
+/* STR UI-01 — Home Dashboard Standalone Visual Reference v1.1
+ * Refinement over v1.0. See STR_UI_00C_REFINEMENT_REPORT.md.
+ *
+ * R1 typography: Tajawal (Arabic, SIL OFL 1.1) — best visual match to
+ *   assets/approved-reference.png per VLM analysis (95% hero, 90% sidebar).
+ *   IBM Plex Sans (Latin, SIL OFL 1.1) for English numerals + LTR runs.
+ *
+ * R5 mobile overflow fix: topbar/sidebar constrained; min-width:0 on flex children.
+ * R2 hero: overlays reduced; brightness lifted.
+ * R3 spacing: header 76px, sidebar 198px preserved; rhythm tightened.
+ * R4 icons: SVG-based, consistent 24px stroke-2.
+ * R8: theme button removed (dark theme is the reference).
+ */
+
+.str-home{
+  color-scheme:dark;
+  --bg:#030a16;
+  --panel:#07192d;
+  --panel2:#0a203b;
+  --line:#193453;
+  --text:#f4f7ff;
+  --muted:#a6badc;
+  --blue:#087bff;
+  --cyan:#00c7ff;
+  --purple:#8a2eff;
+  --radius:13px;
+  /* R1: Typography stack — Tajawal primary (Arabic), IBM Plex Sans (Latin) */
+  --font-ar:'Tajawal','IBM Plex Sans',system-ui,'Segoe UI',Tahoma,Arial,sans-serif;
+  --font-en:'IBM Plex Sans','Tajawal',system-ui,'Segoe UI',Tahoma,Arial,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+
+.str-home *{box-sizing:border-box}
+html{scroll-behavior:smooth}
+.str-home{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-ar);
+  font:14px/1.55 var(--font-ar);
+  font-weight:400;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+/* LTR (English) uses the Latin stack */
+html[dir="ltr"] .str-home{font-family:var(--font-en)}
+
+.str-home a{color:inherit;text-decoration:none}
+.str-home button{font:inherit;cursor:pointer;color:inherit;background:transparent;border:0}
+.str-home button:disabled{cursor:not-allowed;opacity:.55}
+
+/* R1 SVG icons — consistent 24px box, stroke-2 by default
+ * STR-UI-00D FIX: also constrain SVGs that appear WITHOUT a class (e.g. inside .lesson,
+ * .person, .activity-item). Without explicit width/height, Chromium lets an SVG
+ * without width/height attributes take the line-height × flex height of its parent,
+ * producing 368×368px+ arrows. The defensive rule below caps any SVG that lacks
+ * an .ico/.ico-sm class at 24px (or 20px for the small inline arrows), preserving
+ * the Lucide-compatible stroke-2 style.
+ */
+.ico{width:20px;height:20px;flex:none}
+.ico-sm{width:16px;height:16px;flex:none}
+.ico path,.ico rect,.ico circle,.ico polygon,.ico line{
+  fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+.ico-sm path,.ico-sm rect,.ico-sm circle,.ico-sm line{
+  fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+.ico[aria-hidden="true"],.ico-sm[aria-hidden="true"]{pointer-events:none}
+
+/* STR-UI-00D FIX — D2: SVGs inside .lesson, .person, .activity-item, .section-heading
+ * must have explicit dimensions. They are inline chevrons/arrows.
+ * Without this rule they balloon to 274×274 / 368×368px (verified via Playwright).
+ */
+.lesson>svg,.person>svg,.activity-item .act-icon svg,.section-heading h2 svg,.section-heading a svg{
+  width:18px;height:18px;flex:none;
+  fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+.lesson-thumb svg,.btn svg{width:20px;height:20px;flex:none}
+/* keep stroke style on every SVG path/rect/circle/line globally so any future
+   inline SVG without .ico still inherits the Lucide-compatible stroke style */
+.str-home svg:not([width]):not([height]) path,
+.str-home svg:not([width]):not([height]) rect,
+.str-home svg:not([width]):not([height]) circle,
+.str-home svg:not([width]):not([height]) line{
+  fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+}
+
+/* R6 demo banner — translated */
+.demo-banner{
+  height:32px;
+  background:#102b44;
+  color:#b9dfff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  font-size:11px;
+  font-weight:500;
+  border-bottom:1px solid #2b5679;
+  padding:0 10px;
+}
+.demo-banner button{
+  border:1px solid #39678c;
+  color:#e4f3ff;
+  background:#183956;
+  border-radius:6px;
+  padding:2px 12px;
+  font-weight:700;
+  font-size:11px;
+  flex:none;
+}
+
+.app-shell{
+  display:grid;
+  grid-template-columns:198px minmax(0,1fr);
+  grid-template-rows:76px auto;
+  min-height:calc(100vh - 32px);
+  max-width:1800px;
+  margin:auto;
+  /* R5: prevent the whole shell from expanding if a child overflows */
+  min-width:0;
+  overflow:hidden;
+}
+
+/* R3: header tightened to 76px, with safer flex constraints */
+.topbar{
+  grid-column:1/-1;
+  grid-row:1;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  padding:0 22px;
+  background:linear-gradient(110deg,#071326,#0e1931 68%,#07111f);
+  border-bottom:1px solid #1a3450;
+  direction:ltr;
+  min-width:0;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex:none;
+  min-width:0;
+  font-size:14px;
+  line-height:1.25;
+  font-weight:700;
+}
+.brand-mark{
+  font-size:15px;
+  color:#ffc72e;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.brand-mark strong{
+  font-size:30px;
+  letter-spacing:-3px;
+  color:white;
+  text-shadow:0 0 15px #217bff;
+  font-weight:800;
+  font-family:var(--font-en);
+}
+.brand-text{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.brand-name{
+  font-size:14px;
+  font-family:var(--font-en);
+  font-weight:700;
+  letter-spacing:.2px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.brand small{
+  display:block;
+  font-size:12px;
+  margin-top:2px;
+  font-weight:500;
+}
+
+/* R5: search becomes a flex item that allows shrink — min-width:0 + flex:1 + max-width */
+.search{
+  flex:1 1 0;
+  min-width:0;
+  max-width:570px;
+  height:44px;
+  border:1px solid #294363;
+  border-radius:12px;
+  background:#101f3b;
+  color:#b2c6e9;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:0 14px;
+  direction:rtl;
+  overflow:hidden;
+}
+.search .ico{color:#7da3d9;flex:none}
+.search>span{
+  flex:1 1 0;
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:13px;
+}
+.search kbd{
+  font-size:11px;
+  font-family:var(--font-mono);
+  background:#1b3152;
+  border-radius:6px;
+  padding:3px 7px;
+  flex:none;
+}
+
+.header-tools{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  direction:ltr;
+  flex:none;
+}
+.notification{position:relative;display:inline-flex;align-items:center}
+.notification .ico{width:22px;height:22px}
+.notification b{
+  position:absolute;
+  right:-7px;
+  top:-5px;
+  font-size:9px;
+  background:#ed315f;
+  border-radius:50%;
+  padding:1px 5px;
+  color:#fff;
+  font-weight:700;
+  font-family:var(--font-en);
+}
+.avatar{
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  height:38px;
+  width:38px;
+  background:linear-gradient(140deg,#13b8ff,#7547ff);
+  font-weight:800;
+  font-size:15px;
+  flex:none;
+}
+.profile{
+  font-size:12px;
+  direction:rtl;
+  white-space:nowrap;
+  display:flex;
+  flex-direction:column;
+  line-height:1.3;
+}
+.profile small{color:var(--muted);font-weight:500}
+
+.sidebar{
+  grid-column:1;
+  grid-row:2;
+  border-inline-end:1px solid #1b3854;
+  background:linear-gradient(180deg,#041122,#07192d 65%,#040e1b);
+  padding:22px 10px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+  direction:rtl;
+  min-width:0;
+  /* R5: allow sidebar content to scroll vertically only */
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.main-nav,.work-nav{display:flex;flex-direction:column;gap:3px}
+.main-nav a{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:9px 12px;
+  border-radius:8px;
+  font-weight:600;
+  font-size:13.5px;
+  min-width:0;
+}
+.main-nav a.active{
+  background:linear-gradient(90deg,#0047c5,#0d4caa);
+  box-shadow:0 0 0 1px #1689ff,0 0 20px #006dff55;
+}
+.main-nav a .ico{flex:none}
+.main-nav em{font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.main-nav a:hover,.work-nav a:hover{background:#123151}
+
+.sidebar-title{
+  border-top:1px solid #24405a;
+  padding:14px 9px 0;
+  color:#98acd2;
+  font-size:11.5px;
+  font-weight:600;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+}
+.sidebar-title span:last-child{
+  background:#1a2f4e;
+  border-radius:6px;
+  padding:0 6px;
+  font-weight:500;
+}
+
+.work-nav a{
+  padding:5px 8px;
+  font-size:12px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  font-weight:500;
+  min-width:0;
+}
+.work-nav a span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot-violet{background:#8a2eff}
+.dot-blue{background:#087bff}
+.dot-green{background:#22d8a0}
+.dot-orange{background:#ffa53d}
+
+.heritage-card{
+  margin-top:auto;
+  border:1px solid #20416b;
+  min-height:200px;
+  border-radius:12px;
+  background:linear-gradient(0deg,#061020aa,#06102044),url('/home/heritage.webp') center/cover;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:16px 12px;
+  text-align:center;
+}
+.heritage-card h3{font-size:16px;line-height:1.5;font-weight:700;margin:0}
+.heritage-card span{
+  border:1px solid #3d3b75;
+  background:#070f20bd;
+  border-radius:8px;
+  padding:7px;
+  font-size:11.5px;
+  font-weight:500;
+  display:inline-block;
+  margin-top:8px;
+}
+
+.str-home main{
+  grid-column:2;
+  grid-row:2;
+  min-width:0;
+  padding:0 12px 18px;
+  direction:rtl;
+  background:radial-gradient(ellipse at 60% 0%,#0b2441 0%,#030a16 55%);
+}
+
+/* R2: Hero — overlays reduced, hero-scene more visible */
+.hero{
+  height:286px;
+  position:relative;
+  overflow:hidden;
+  border-radius:12px 12px 0 0;
+  display:grid;
+  grid-template-columns:48% 35% 17%;
+  align-items:center;
+  padding:14px 28px;
+  background:
+    linear-gradient(90deg,rgba(4,22,45,0.55) 0%,rgba(6,20,43,0.35) 45%,rgba(4,19,39,0.25) 78%,rgba(4,19,39,0.55) 100%),
+    url('/home/hero-scene.webp') center 38%/cover;
+  box-shadow:inset 0 -60px 60px rgba(4,16,31,0.65);
+}
+.hero:after{
+  content:'';
+  position:absolute;
+  bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,#168dff,transparent);
+}
+.hero-copy{position:relative;z-index:2;min-width:0}
+.eyebrow{
+  font-size:10px;
+  letter-spacing:1.8px;
+  color:#7cbfff;
+  font-weight:700;
+  font-family:var(--font-en);
+  text-transform:uppercase;
+  margin:0 0 8px;
+}
+.hero h1{
+  font-size:clamp(28px,3.2vw,50px);
+  line-height:1.18;
+  margin:0 0 12px;
+  letter-spacing:-.5px;
+  text-shadow:0 4px 14px rgba(3,16,37,0.85);
+  font-weight:800;
+}
+.hero p{
+  font-size:15.5px;
+  color:#e5edff;
+  max-width:480px;
+  margin:0 0 16px;
+  line-height:1.55;
+  font-weight:400;
+}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  gap:8px;
+  border-radius:9px;
+  padding:10px 18px;
+  font-weight:700;
+  font-size:13px;
+  transition:transform .15s ease,box-shadow .15s ease;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{
+  background:linear-gradient(100deg,#04a8f9,#1657ed 60%,#a522e8);
+  box-shadow:0 0 19px rgba(6,116,246,.45);
+  color:#fff;
+}
+.btn.outline{
+  border:1px solid #b6d5ef;
+  background:rgba(6,21,42,0.55);
+  color:#e5edff;
+}
+.btn.small{padding:7px 14px;font-size:12px}
+.btn .ico,.btn .ico-sm{flex:none}
+
+.hero-art{
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  gap:6px;
+  padding-top:6px;
+  opacity:.96;
+  min-width:0;
+}
+.hologram{
+  width:188px;
+  border:1px solid rgba(114,207,255,.7);
+  border-radius:9px;
+  background:linear-gradient(130deg,rgba(44,114,194,.32),rgba(58,32,139,.16));
+  box-shadow:0 0 28px rgba(44,140,243,.4);
+  padding:11px;
+  transform:perspective(700px) rotateY(6deg);
+  display:flex;
+  flex-direction:column;
+  color:#d7eaff;
+  font-size:12px;
+  font-weight:500;
+}
+.hologram b{
+  font-size:24px;
+  color:#9ad7ff;
+  font-weight:800;
+  font-family:var(--font-en);
+  letter-spacing:1px;
+  margin-bottom:4px;
+}
+.hologram span{padding:2px 0;font-size:11.5px}
+.network{color:#55c7ff;font-size:22px;text-align:center;padding-top:5px;font-family:var(--font-en)}
+
+.holo-label{
+  margin-top:100px;
+  padding:10px 12px;
+  background:rgba(6,28,56,.72);
+  border:1px solid #2189e9;
+  border-radius:8px;
+  color:#74cfff;
+  line-height:1.9;
+  box-shadow:0 0 22px rgba(0,140,255,.28);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:11.5px;
+  font-weight:600;
+}
+.holo-label span{display:inline-flex;align-items:center;gap:6px}
+
+.hero-quote{
+  font-size:11.5px;
+  text-align:center;
+  color:#e0eaff;
+  align-self:start;
+  margin-top:46px;
+  line-height:2;
+  font-weight:500;
+  min-width:0;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:11px;
+  margin:-1px 16px 14px;
+  position:relative;
+  z-index:3;
+}
+.stat{
+  background:linear-gradient(125deg,#0a1e37,#071326);
+  border:1px solid #163453;
+  border-radius:12px;
+  padding:11px 14px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-height:68px;
+  box-shadow:0 8px 16px rgba(0,0,0,.32);
+  min-width:0;
+}
+.stat i{
+  display:grid;
+  place-items:center;
+  flex:none;
+  font-style:normal;
+  background:linear-gradient(135deg,#0060a5,#153f8c);
+  color:#49dfff;
+  width:42px;height:42px;
+  border-radius:11px;
+}
+.stat i svg{width:22px;height:22px}
+.stat:nth-child(2) i{color:#ad8bff;background:#32237c}
+.stat:nth-child(3) i{color:#25fff3;background:#034b59}
+.stat:nth-child(4) i{color:#ffd78b;background:#594024}
+.stat:nth-child(5) i{color:#fff0a5;background:#5c4614}
+.stat strong{
+  display:block;
+  font-size:21px;
+  font-weight:800;
+  direction:ltr;
+  text-align:right;
+  font-family:var(--font-en);
+  line-height:1.1;
+}
+.stat span{display:block;color:#c0d1eb;font-size:11.5px;font-weight:500;line-height:1.4}
+
+.feature-grid{
+  display:grid;
+  grid-template-columns:1.22fr 1.1fr 1.05fr;
+  gap:12px;
+  margin-bottom:12px;
+}
+.panel{
+  background:linear-gradient(135deg,#0b203b,#061729 75%);
+  border:1px solid #173654;
+  border-radius:12px;
+  padding:16px;
+  min-width:0;
+  box-shadow:0 5px 18px rgba(0,0,0,.2);
+}
+.feature-heading{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  min-height:80px;
+}
+.feature-heading h2{font-size:19px;line-height:1.3;margin:0 0 6px;font-weight:700}
+.feature-heading p{font-size:12px;line-height:1.55;margin:0;color:#b5c9e5;font-weight:400}
+.glow-icon{
+  flex:none;
+  width:62px;height:62px;
+  border:3px solid #249eff;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:#d5eeff;
+  background:radial-gradient(circle,#5b35b5,#072b6a 65%);
+  box-shadow:0 0 16px rgba(7,140,255,.45);
+}
+.glow-icon svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.fake-input{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  border:1px solid #2c5277;
+  border-radius:10px;
+  color:#839dc4;
+  height:42px;
+  padding:4px 6px 4px 12px;
+  font-size:12px;
+  margin:10px 0;
+  min-width:0;
+}
+.fake-input span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fake-input button{
+  height:36px;
+  width:38px;
+  background:#176aff;
+  border:0;
+  border-radius:9px;
+  color:#fff;
+  flex:none;
+  display:grid;
+  place-items:center;
+}
+
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.chips span{
+  background:#102641;
+  border:1px solid #2a4361;
+  border-radius:9px;
+  text-align:center;
+  padding:7px 3px;
+  font-size:10.5px;
+  font-weight:500;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.category-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:14px 0}
+.category-grid div{
+  font-size:22px;
+  text-align:center;
+  background:linear-gradient(#123e68,#0b203e);
+  border:1px solid #185a94;
+  border-radius:9px;
+  min-height:60px;
+  padding:6px 2px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  min-width:0;
+}
+.category-grid div:nth-child(1){color:#22d8a0}
+.category-grid div:nth-child(3){color:#ba65ff}
+.category-grid div:nth-child(5){color:#c799ff}
+.category-grid div svg{width:22px;height:22px}
+.category-grid small{display:block;font-size:9.5px;color:#e1ecff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+.explore-panel{text-align:center}
+.explore-panel .feature-heading{text-align:start}
+.levels{display:flex;gap:7px;justify-content:flex-start;margin:2px 0 12px;flex-wrap:wrap}
+.levels span{
+  border-radius:7px;
+  padding:5px 12px;
+  background:#102740;
+  font-size:11px;
+  font-weight:500;
+}
+.levels span:first-child{border:1px solid #159dff;color:#bfe0ff}
+
+.lesson{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:9px 0;
+  border-bottom:1px solid #1a3550;
+  min-width:0;
+}
+.lesson svg{flex:none;color:#7aa3d9}
+.lesson-thumb{
+  display:grid;
+  place-items:center;
+  width:70px;height:46px;
+  flex:none;
+  border-radius:8px;
+  background:radial-gradient(circle,#1975b8,#05214d);
+  font-weight:800;
+  font-size:13px;
+  color:#a7edff;
+  font-family:var(--font-en);
+}
+.lesson-thumb.blue{background:radial-gradient(circle,#673fd2,#072354)}
+.lesson div{flex:1;min-width:0}
+.lesson strong{display:block;font-size:12px;font-weight:600;line-height:1.4}
+.lesson small{display:block;color:#a1b8d4;font-size:10.5px;font-weight:400}
+
+.lower-grid{display:grid;grid-template-columns:1.8fr .86fr .94fr;gap:12px}
+.section-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:10px;
+}
+.section-heading h2{
+  font-size:15px;
+  margin:0;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-weight:700;
+}
+.section-heading h2 svg{width:18px;height:18px;color:#9ad7ff}
+.section-heading a{
+  font-size:11px;
+  color:#74c4ff;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-weight:500;
+  white-space:nowrap;
+}
+
+.projects{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.project{
+  overflow:hidden;
+  background:#f6f9ff;
+  border-radius:9px;
+  color:#10203b;
+  text-align:center;
+  min-width:0;
+}
+.project-img{
+  height:82px;
+  background-size:cover;
+  background-position:center;
+  position:relative;
+}
+.project-img.education{background-image:url('/home/project-education.webp')}
+.project-img.health{background-image:url('/home/project-health.webp')}
+.project-img.city{background-image:url('/home/project-city.webp')}
+.project-img span{
+  position:absolute;
+  inset-inline-end:7px;
+  top:7px;
+  border-radius:6px;
+  background:#0a8d60;
+  color:#fff;
+  padding:3px 7px;
+  font-size:10px;
+  font-weight:600;
+}
+.project-img.health span{background:#075fff}
+.project-img.city span{background:#7047e5}
+.project h3{font-size:13px;margin:8px 5px 2px;font-weight:700}
+.project p{font-size:10.5px;color:#61738f;margin:0 4px 7px;font-weight:400}
+.tags{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
+.tags span{
+  font-size:10px;
+  border-radius:12px;
+  background:#dce8ff;
+  color:#14408e;
+  padding:2px 8px;
+  font-weight:500;
+}
+.progress{margin:10px 14px;height:7px;background:#d8e1f1;border-radius:8px;overflow:hidden}
+.progress b{display:block;height:100%;background:linear-gradient(90deg,#176aff,#75b4ff);border-radius:8px}
+
+.person{
+  display:flex;
+  gap:9px;
+  align-items:center;
+  border-bottom:1px solid #203c59;
+  padding:10px 0;
+  min-width:0;
+}
+.person>svg{flex:none;color:#7aa3d9}
+.person-avatar{
+  width:44px;height:44px;
+  display:grid;
+  place-items:center;
+  flex:none;
+  border-radius:50%;
+  background:linear-gradient(135deg,#d76b83,#542f88);
+  font-size:20px;
+  font-weight:700;
+  color:#fff;
+}
+.person-avatar.green{background:linear-gradient(135deg,#00b99e,#175f80)}
+.person-avatar.violet{background:linear-gradient(135deg,#aa6bde,#3d4589)}
+.person>div{flex:1;min-width:0}
+.person strong{display:block;font-size:12px;font-weight:600}
+.person small{display:block;color:#a6c0df;font-size:10.5px;font-weight:400}
+.person .tags{justify-content:flex-start;margin-top:4px}
+.person .tags span{
+  background:#102c52;
+  color:#7dc1ff;
+  font-size:9.5px;
+}
+
+.activity-item{
+  display:flex;
+  gap:11px;
+  align-items:center;
+  padding:10px 0;
+  border-bottom:1px solid #203c59;
+  min-width:0;
+}
+.act-icon{
+  font-size:18px;
+  color:#37f3ba;
+  background:#073d40;
+  border-radius:10px;
+  width:34px;height:34px;
+  text-align:center;
+  display:grid;
+  place-items:center;
+  flex:none;
+}
+.act-icon.violet{color:#a77dff;background:#2b165d}
+.act-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.activity-item p{margin:0;font-size:12px;line-height:1.4;font-weight:500}
+.activity-item small{display:block;font-size:10px;color:#8fa8ca;font-weight:400;margin-top:2px}
+
+.str-home footer{
+  font-size:10.5px;
+  text-align:center;
+  color:#6582a4;
+  padding:14px 8px;
+  font-weight:500;
+}
+
+/* Focus accessibility */
+a:focus-visible,button:focus-visible{
+  outline:3px solid #69c8ff;
+  outline-offset:3px;
+  border-radius:6px;
+}
+
+/* R3 — responsive tightening */
+@media(max-width:1350px){
+  .feature-grid{grid-template-columns:1fr 1fr}
+  .learning-panel{grid-column:1/-1}
+  .lower-grid{grid-template-columns:1.4fr 1fr}
+  .activity{grid-column:1/-1}
+  .hero-quote{display:none}
+  .hero{grid-template-columns:60% 40%}
+  .hero-art{justify-content:flex-start}
+  .stats{margin-inline:0}
+  .stat{padding:8px}
+  .stat strong{font-size:18px}
+}
+
+@media(max-width:900px){
+  .app-shell{grid-template-columns:64px minmax(0,1fr)}
+  .brand{min-width:auto}
+  .brand-text{display:none}
+  .search{width:30vw;max-width:30vw}
+  .sidebar{padding:14px 5px;overflow-y:auto;overflow-x:hidden}
+  .main-nav a{justify-content:center;padding:10px 0}
+  .main-nav em,.sidebar-title,.work-nav,.heritage-card{display:none}
+  .hero{height:308px}
+  .hero h1{font-size:32px}
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .lower-grid{grid-template-columns:1fr}
+  .activity{grid-column:auto}
+}
+
+/* R5 — Mobile breakpoint: hard overflow guards + horizontal sidebar strip */
+@media(max-width:640px){
+  .app-shell{
+    display:block;
+    /* R5: top-level overflow guard — never exceeds viewport width */
+    max-width:100vw;
+    overflow-x:hidden;
+  }
+  .topbar{
+    height:60px;
+    padding:0 10px;
+    gap:8px;
+    /* R5: topbar itself is a flex that must not overflow */
+    min-width:0;
+    max-width:100%;
+  }
+  .brand{min-width:auto;gap:8px}
+  .brand-mark strong{font-size:26px}
+  .search{
+    width:auto;
+    flex:1 1 0;
+    min-width:0;
+    max-width:none;
+    height:38px;
+    font-size:10px;
+  }
+  .search kbd{display:none}
+  .profile{display:none}
+  .header-tools{gap:8px}
+  .header-tools .notification,.header-tools .icon-btn{display:none}
+  .avatar{width:30px;height:30px;font-size:13px}
+
+  /* R5: sidebar → horizontal scroll strip, with internal overflow only */
+  .sidebar{
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:#07172c;
+    border-bottom:1px solid #23425f;
+    border-inline-end:0;
+    padding:6px 4px;
+    /* The sidebar itself is allowed horizontal scroll INTERNALLY — its content
+       can overflow, but the sidebar as a whole fits the viewport. */
+    overflow-x:auto;
+    overflow-y:hidden;
+    /* Hide scrollbar visually for clean strip */
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+  }
+  .sidebar::-webkit-scrollbar{display:none}
+  .main-nav{
+    flex-direction:row;
+    gap:3px;
+    width:max-content;
+    min-width:0;
+    /* Allow internal horizontal scroll inside the sidebar strip */
+  }
+  .main-nav a{
+    min-width:42px;
+    padding:6px 8px;
+    flex:none;
+    justify-content:center;
+  }
+  .main-nav a .ico{width:20px;height:20px}
+  .str-home main{padding:0 8px 12px;min-width:0}
+  .hero{
+    height:auto;
+    min-height:340px;
+    display:block;
+    padding:22px 14px;
+    background-position:center;
+  }
+  .hero-copy{max-width:100%}
+  .hero h1{font-size:32px}
+  .hero p{font-size:13px}
+  .hero-art{height:80px;opacity:.55;justify-content:flex-end}
+  .hologram{display:none}
+  .holo-label{margin:0;font-size:10px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:7px;margin:8px 0}
+  .stat{min-height:58px;gap:7px;padding:8px 10px}
+  .stat i{width:34px;height:34px}
+  .stat i svg{width:18px;height:18px}
+  .stat strong{font-size:16px}
+  .stat span{font-size:10.5px}
+  .feature-grid{grid-template-columns:1fr}
+  .learning-panel{grid-column:auto}
+  .feature-heading h2{font-size:17px}
+  .projects{grid-template-columns:1fr 1fr}
+  .project:last-child{display:none}
+  .lower-grid{display:block}
+  .lower-grid>.panel{margin-bottom:10px}
+  .demo-banner{font-size:10px;text-align:center;padding:0 6px;height:28px;gap:8px}
+  .demo-banner button{font-size:10px;padding:2px 8px}
+  .hero-actions .btn{font-size:11px;padding:9px 12px}
+}
+
+/* R1: LTR font stack — Tajawal fallback for any stray Arabic; IBM Plex Sans primary */
+html[dir="ltr"] .str-home .app-shell{grid-template-columns:198px minmax(0,1fr)}
+html[dir="ltr"] .str-home .sidebar{direction:ltr}
+html[dir="ltr"] .str-home .str-home main{direction:ltr}
+html[dir="ltr"] .str-home .feature-heading,
+html[dir="ltr"] .str-home .hero-copy{direction:ltr}
+html[dir="ltr"] .str-home .hero{direction:ltr}
+html[dir="ltr"] .str-home .hero h1{font-size:clamp(28px,3vw,46px)}
+html[dir="ltr"] .str-home .brand-name{letter-spacing:.3px}
+
+@media(max-width:900px){
+  html[dir="ltr"] .str-home .app-shell{grid-template-columns:64px minmax(0,1fr)}
+}
+@media(max-width:640px){
+  html[dir="ltr"] .str-home .app-shell{display:block}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .btn{transition:none}
+}
